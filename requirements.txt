@@ -1,0 +1,14 @@
+streamlit
+folium
+geopy
+streamlit-folium
+openrouteservice
+pyyaml
+pandas
+requests
+geopandas
+shapely
+pyproj
+census
+plotly
+osmnx
