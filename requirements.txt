@@ -12,3 +12,4 @@ pyproj
 census
 plotly
 osmnx
+scipy
