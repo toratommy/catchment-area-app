@@ -35,7 +35,7 @@ def main():
         #st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
         st.subheader('Get started: define your catchment area')
-        address = st.text_input("Enter the Address", value='233 S Wacker Dr, Chicago, IL, 60606')
+        address = st.text_input("Enter the Address", value='1060 W Addison St, Chicago, IL 60613')
         radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
         radius = st.number_input(f"Enter Radius in {radius_type.split()[1]}", min_value=1, max_value = 100, value=10)
         generate_catchment = st.button("Generate Catchment Area")
@@ -160,7 +160,7 @@ def main():
                 with st.spinner('Fetching POI data to plot...'):
                     time.sleep(5)
                     pois_gdf = fetch_poi_within_catchment(st.session_state.user_poly, poi_categories)
-                display_poi_counts(pois_gdf)
+                #display_poi_counts(pois_gdf)
                 catchment_map = plot_poi_data_on_map(pois_gdf, st.session_state.user_poly, poi_map_type)
                 catchment_map.fit_bounds(st.session_state.bounds)
                 folium_static(catchment_map)
