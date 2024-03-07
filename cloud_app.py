@@ -8,6 +8,13 @@ from census import Census
 import time
 from utils import *
 
+# TO DO's
+# Add sum of census var under total population. If not a pop var, display N/A (variable does not represent pop.)
+# Change census var defaults to income
+# Add more POI categories
+# Explore why poi counts don't match # of markers
+# Finalize docs
+
 # Initialize configuration variables
 ors_client = client.Client(key=st.secrets['openroute_api_key'])
 census_year = st.secrets['census_year']
@@ -25,8 +32,7 @@ def main():
                Utilizing 100% open-source data and tools!
                """
         )
-        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai"""
-                   )
+        #st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
         st.subheader('Get started: define your catchment area')
         address = st.text_input("Enter the Address", value='233 S Wacker Dr, Chicago, IL, 60606')
@@ -177,8 +183,7 @@ def main():
                    ''')
         st.subheader('Step-by-step guide:')
         st.subheader('Data source documentation:')
-        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai"""
-                   )
+        #st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         
 # Run app
 
