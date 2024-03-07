@@ -9,6 +9,7 @@ from shapely.ops import transform
 import pyproj
 from functools import partial
 from census import Census
+from scipy import *
 import plotly.figure_factory as ff
 import osmnx as ox
 from folium.plugins import HeatMap
