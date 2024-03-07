@@ -9,7 +9,7 @@ import time
 from utils import *
 
 # Initialize configuration variables
-ors_client = st.secrets['openroute_api_key']
+ors_client = client.Client(key=st.secrets['openroute_api_key'])
 census_year = st.secrets['census_year']
 census_api_key =  st.secrets['census_api_key']
 
