@@ -7,11 +7,12 @@ import geopandas as gpd
 from census import Census
 import time
 from utils import *
+import pickle
 
 # TO DO's
 # Add sum of census var under total population. If not a pop var, display N/A (variable does not represent pop.)
+# Add variables below map
 # Change census var defaults to income
-# Add more POI categories
 # Explore why poi counts don't match # of markers
 # Finalize docs
 
@@ -32,7 +33,7 @@ def main():
                Utilizing 100% open-source data and tools!
                """
         )
-        #st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
+        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
         st.subheader('Get started: define your catchment area')
         address = st.text_input("Enter the Address", value='1060 W Addison St, Chicago, IL 60613')
@@ -138,7 +139,10 @@ def main():
         
     with tab3:
         st.subheader('Overlay POI data within your catchment')
-        poi_categories = st.multiselect('Select POI categories to map',['cafe','bar','pub','restaurant','fast_food','car_wash','charging_station'])
+        # read in list of amenities
+        with open('amenities.pkl', 'rb') as f:
+            amenity_list = pickle.load(f)
+        poi_categories = st.multiselect('Select POI categories to map',amenity_list)
         poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
         plot_poi_data = st.button("Plot POI data")
         st.divider()
@@ -183,7 +187,7 @@ def main():
                    ''')
         st.subheader('Step-by-step guide:')
         st.subheader('Data source documentation:')
-        #st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
+        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         
 # Run app
 
