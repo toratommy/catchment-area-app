@@ -284,15 +284,16 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
     folium.GeoJson(mapping(catchment_polygon), style_function=lambda x: {'color': 'black', 'fill':False}).add_to(m)
     for _, poi in pois_gdf.iterrows():
         # Construct address string
-        #address_parts = [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]
-        #address = ', '.join(filter(None, address_parts))
-        tooltip = f"{poi['name']}"
+        address_parts = [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]
+        address = ', '.join(filter(None, address_parts))
+        tooltip = f"{poi.get('name', 'Unnamed')} - {address}"
         
+        poi_location = poi.geometry.centroid.coords[0]
         # Determine location based on geometry type
-        if poi.geometry.geom_type == 'Polygon' or poi.geometry.geom_type == 'MultiPolygon':
-            poi_location = poi.geometry.centroid.coords[0]
-        else:  # Assume Point
-            poi_location = (poi['lat'], poi['lon'])
+        #if poi.geometry.geom_type == 'Polygon' or poi.geometry.geom_type == 'MultiPolygon':
+        #    poi_location = poi.geometry.centroid.coords[0]
+        #else:  # Assume Point
+        #    poi_location = (poi.geometry.y, poi.geometry.x)
         
         # Plot based on map_type
         if map_type == 'POI markers':
