@@ -292,7 +292,7 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
         if poi.geometry.geom_type == 'Polygon' or poi.geometry.geom_type == 'MultiPolygon':
             poi_location = poi.geometry.centroid.coords[0]
         else:  # Assume Point
-            poi_location = (poi.lat, poi.lon)
+            poi_location = (poi.lat[0], poi.lon[0])
         
         # Plot based on map_type
         if map_type == 'POI markers':
