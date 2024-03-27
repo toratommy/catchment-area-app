@@ -282,7 +282,7 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
     
     # Add the catchment area boundary to the map
     folium.GeoJson(mapping(catchment_polygon), style_function=lambda x: {'color': 'black', 'fill':False}).add_to(m)
-    for _, poi in pois_gdf.iterrows():
+    for poi in pois_gdf.itertuples():
         # Construct address string
         address_parts = [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]
         address = ', '.join(filter(None, address_parts))
@@ -292,7 +292,7 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
         if poi.geometry.geom_type == 'Polygon' or poi.geometry.geom_type == 'MultiPolygon':
             poi_location = poi.geometry.centroid.coords[0]
         else:  # Assume Point
-            poi_location = (poi.lat[0], poi.lon[0])
+            poi_location = (poi['lat'], poi['lon'])
         
         # Plot based on map_type
         if map_type == 'POI markers':
