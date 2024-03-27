@@ -164,7 +164,7 @@ def main():
                 with st.spinner('Fetching POI data to plot...'):
                     time.sleep(5)
                     pois_gdf = fetch_poi_within_catchment(st.session_state.user_poly, poi_categories)
-                #display_poi_counts(pois_gdf)
+                display_poi_counts(pois_gdf)
                 catchment_map = plot_poi_data_on_map(pois_gdf, st.session_state.user_poly, poi_map_type)
                 catchment_map.fit_bounds(st.session_state.bounds)
                 folium_static(catchment_map)
