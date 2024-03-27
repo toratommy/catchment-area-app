@@ -289,12 +289,7 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
         tooltip = f"{poi.get('name', 'Unnamed')} - {address}"
         
         poi_location = poi.geometry.centroid.coords[0]
-        # Determine location based on geometry type
-        #if poi.geometry.geom_type == 'Polygon' or poi.geometry.geom_type == 'MultiPolygon':
-        #    poi_location = poi.geometry.centroid.coords[0]
-        #else:  # Assume Point
-        #    poi_location = (poi.geometry.y, poi.geometry.x)
-        
+
         # Plot based on map_type
         if map_type == 'POI markers':
             folium.Marker(location=[poi_location[1], poi_location[0]], popup=tooltip).add_to(m)
@@ -315,7 +310,7 @@ def display_poi_counts(pois_gdf):
         counts = pois_gdf['amenity'].value_counts()
         for category, count in counts.items():
             st.write(f"{category}: {count} distinct locations")
-            st.dataframe(pois_gdf[['amenity','name','addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']])
+            #st.dataframe(pois_gdf[['amenity','name','addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']])
     else:
         st.write("No POI data available.")
 
