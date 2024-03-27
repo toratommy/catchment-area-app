@@ -263,7 +263,7 @@ def fetch_poi_within_catchment(catchment_polygon, category):
         tags = {'amenity': category}
         
         # Attempt to fetch POIs within the catchment area polygon
-        pois_gdf = ox.geometries_from_polygon(catchment_polygon, tags=tags)
+        pois_gdf = ox.features_from_polygon(catchment_polygon, tags=tags)
         
         # Check if the returned GeoDataFrame is empty
         if pois_gdf.empty:
@@ -289,10 +289,10 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
         tooltip = f"{poi.get('name', 'Unnamed')} - {address}"
         
         # Determine location based on geometry type
-        if poi.geometry.geom_type == 'Polygon':
+        if poi.geometry.geom_type == 'Polygon' or poi.geometry.geom_type == 'MultiPolygon':
             poi_location = poi.geometry.centroid.coords[0]
         else:  # Assume Point
-            poi_location = (poi.geometry.y, poi.geometry.x)
+            poi_location = (poi.lat, poi.lon)
         
         # Plot based on map_type
         if map_type == 'POI markers':
