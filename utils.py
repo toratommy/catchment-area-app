@@ -313,7 +313,8 @@ def display_poi_counts(pois_gdf):
     if not pois_gdf.empty and 'amenity' in pois_gdf.columns:
         counts = pois_gdf['amenity'].value_counts()
         for category, count in counts.items():
-            st.write(f"{category}: {count}")
+            st.write(f"{category}: {count} distinct locations")
+            st.dataframe(pois_gdf[['amenity','name','lat','lon','addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']])
     else:
         st.write("No POI data available.")
 
