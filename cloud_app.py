@@ -22,11 +22,11 @@ census_year = st.secrets['census_year']
 census_api_key =  st.secrets['census_api_key']
 
 def main():
-    add_logo('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
     st.title("Catchment Area Explorer")
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
     with st.sidebar:
+        add_logo('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
         st.subheader('About')
         st.caption("""📍 Welcome to Catchment Area Explorer! Generate a custom catchment 
                area defined by distance or drive time around any location in the US. 
