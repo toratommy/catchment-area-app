@@ -13,4 +13,5 @@ census
 plotly
 osmnx
 scipy
+validators
 streamlit-extras
