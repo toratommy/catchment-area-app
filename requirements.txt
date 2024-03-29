@@ -13,3 +13,4 @@ census
 plotly
 osmnx
 scipy
+streamlit-extras

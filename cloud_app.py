@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_extras.app_logo import add_logo
 import folium
 from streamlit_folium import folium_static
 from openrouteservice import client
@@ -11,9 +12,7 @@ import pickle
 
 # TO DO's
 # Add sum of census var under total population. If not a pop var, display N/A (variable does not represent pop.)
-# Add variables below map
-# Change census var defaults to income
-# Explore why poi counts don't match # of markers
+# Add caching
 # Add TORA Logo
 # Finalize docs
 
@@ -24,6 +23,7 @@ census_api_key =  st.secrets['census_api_key']
 
 def main():
     st.title("Catchment Area Explorer")
+    add_logo('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
     with st.sidebar:
