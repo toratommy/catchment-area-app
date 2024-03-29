@@ -23,7 +23,7 @@ census_api_key =  st.secrets['census_api_key']
 
 def main():
     st.title("Catchment Area Explorer")
-    add_logo('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
+    add_logo('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png', height=300)
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
     with st.sidebar:
