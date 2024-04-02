@@ -16,7 +16,7 @@ from folium.plugins import HeatMap
 from shapely.geometry import mapping
 
 @st.cache_data
-def draw_circle(catchment_map, location, radius):
+def draw_circle(_catchment_map, location, radius):
     """Draw a circle on the map."""
         
         # Create a point from the location
@@ -35,13 +35,13 @@ def draw_circle(catchment_map, location, radius):
     # Create circle buffer around the point and transform back to WGS84
     circle_poly = transform(az_ea_proj, point.buffer(radius))  # buffer in projected crs units (meters)
     circle = folium.GeoJson(circle_poly, style_function=lambda x:{'fillColor': 'black', 'color': 'black'})
-    circle.add_to(catchment_map)
+    circle.add_to(_catchment_map)
     bounds = circle.get_bounds()
-    catchment_map.fit_bounds(bounds)
+    _catchment_map.fit_bounds(bounds)
     return circle_poly, bounds
 
 @st.cache_data
-def draw_drive_time_area(catchment_map, location, drive_time, client):
+def draw_drive_time_area(_catchment_map, location, drive_time, client):
     """Draw an area based on drive time."""
     coordinates = [[location.longitude, location.latitude]]
     params = {
@@ -52,10 +52,10 @@ def draw_drive_time_area(catchment_map, location, drive_time, client):
     response_iso = client.isochrones(**params)
     response_poly = shape(response_iso['features'][0]['geometry'])
     polygon = folium.GeoJson(response_iso, style_function=lambda x:{'fillColor': 'black', 'color': 'black'})
-    polygon.add_to(catchment_map)
+    polygon.add_to(_catchment_map)
 
     bounds = polygon.get_bounds()
-    catchment_map.fit_bounds(bounds)
+    _catchment_map.fit_bounds(bounds)
     return response_poly, bounds
 
 @st.cache_data
