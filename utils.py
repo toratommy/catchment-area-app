@@ -15,6 +15,7 @@ import osmnx as ox
 from folium.plugins import HeatMap
 from shapely.geometry import mapping
 
+@st.cache_data
 def draw_circle(catchment_map, location, radius):
     """Draw a circle on the map."""
         
@@ -39,6 +40,7 @@ def draw_circle(catchment_map, location, radius):
     catchment_map.fit_bounds(bounds)
     return circle_poly, bounds
 
+@st.cache_data
 def draw_drive_time_area(catchment_map, location, drive_time, client):
     """Draw an area based on drive time."""
     coordinates = [[location.longitude, location.latitude]]
@@ -56,6 +58,7 @@ def draw_drive_time_area(catchment_map, location, drive_time, client):
     catchment_map.fit_bounds(bounds)
     return response_poly, bounds
 
+@st.cache_data
 def geocode_address(address):
     """Geocode an address using Nominatim."""
     geolocator = Nominatim(user_agent="streamlit_catchment_app")
@@ -63,7 +66,8 @@ def geocode_address(address):
         return geolocator.geocode(address)
     except:
         return None
-    
+
+@st.cache_data    
 def fetch_census_variables(api_url):
     """
     Fetch the variables.json from the Census API.
@@ -85,6 +89,7 @@ def fetch_census_variables(api_url):
         print(f"Failed to fetch variables.json: {e}")
         return None
     
+@st.cache_data    
 def load_state_boundaries(census_year):
     """
     Load state boundaries using the US Census Bureau's cartographic boundary files.
@@ -93,6 +98,7 @@ def load_state_boundaries(census_year):
     gdf = gpd.read_file(url)
     return gdf
 
+@st.cache_data
 def find_intersecting_states(user_gdf, states_gdf):
     """
     Find states that intersect with the user-defined geography.
@@ -100,6 +106,7 @@ def find_intersecting_states(user_gdf, states_gdf):
     intersecting_states = states_gdf[states_gdf.intersects(user_gdf.unary_union)]
     return intersecting_states['GEOID']
 
+@st.cache_data
 def load_tract_shapefile(state_code, census_year):
     """
     Load a census tract shapefile directly from the Census website for a given state code.
@@ -108,6 +115,7 @@ def load_tract_shapefile(state_code, census_year):
     gdf = gpd.read_file(url)
     return gdf
 
+@st.cache_data
 def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
     """
     Calculate which tracts overlap with the user-defined geography for the intersecting states,
@@ -133,6 +141,7 @@ def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
 
     return overlapping_tracts
 
+@st.cache_data
 def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization):
     """
     Fetch census data in batches for all tracts within each state/county in the overlapping_tracts dataframe.
@@ -166,6 +175,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
 
     return all_census_data
 
+@st.cache_data
 def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
     """
     Plot tracts on a Folium map, colored by a specified census variable.
@@ -205,7 +215,7 @@ def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, censu
     catchment_map.fit_bounds(bounds)
     
 
-
+@st.cache_data
 def get_color(value, deciles):
     """
     Determine color based on which decile the value falls into.
@@ -220,6 +230,7 @@ def get_color(value, deciles):
             return colors[i]
     return colors[-1]  # Use the last color for values in the highest decile
 
+@st.cache_data
 def calculate_area_sq_miles(user_poly):
     proj = partial(pyproj.transform,
                    pyproj.Proj(init='epsg:4326'),  # Source coordinate system (WGS84)
@@ -229,6 +240,7 @@ def calculate_area_sq_miles(user_poly):
     area_sq_miles = round(projected_polygon.area / 2589988.11,2)  # Convert area from square meters to square miles
     return area_sq_miles
 
+@st.cache_data
 def create_distribution_plot(census_data, variables, var_name, normalization):
     # Create distplot with custom bin_size
     if normalization == 'Yes':
@@ -247,6 +259,7 @@ def create_distribution_plot(census_data, variables, var_name, normalization):
     )
     return fig
 
+@st.cache_data
 def fetch_poi_within_catchment(catchment_polygon, category):
     """
     Fetch points of interest within a specified catchment area polygon and category.
@@ -274,7 +287,8 @@ def fetch_poi_within_catchment(catchment_polygon, category):
     except Exception as e:
         print(f"An error occurred while fetching POIs: {e}")
         return gpd.GeoDataFrame()  
-
+    
+@st.cache_data
 def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
     # Create a map centered around the catchment area
     map_center = [catchment_polygon.centroid.y, catchment_polygon.centroid.x]
@@ -304,6 +318,7 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
 
     return m
 
+@st.cache_data
 def display_poi_counts(pois_gdf):
     # Assuming 'amenity' column stores the POI category
     if not pois_gdf.empty and 'amenity' in pois_gdf.columns:
