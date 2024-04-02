@@ -25,7 +25,7 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
     with st.sidebar:
-        st.image('https://media.licdn.com/dms/image/D560BAQGFAStYPbvadw/company-logo_200_200/0/1708388245967/tora_insights_logo?e=1720051200&v=beta&t=xJhq2ZbOlEVkhA3ndLogD0HRW1Ggg4dNIzLyqFXnrbA')
+        st.image('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
         st.subheader('About')
         st.caption("""📍 Welcome to Catchment Area Explorer! Generate a custom catchment 
                area defined by distance or drive time around any location in the US. 
