@@ -248,7 +248,6 @@ def create_distribution_plot(census_data, variables, var_name, normalization):
     )
     return fig
 
-@st.cache_data
 def fetch_poi_within_catchment(catchment_polygon, category):
     """
     Fetch points of interest within a specified catchment area polygon and category.
