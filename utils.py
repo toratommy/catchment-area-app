@@ -136,7 +136,6 @@ def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
 
     return overlapping_tracts
 
-@st.cache_data
 def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization):
     """
     Fetch census data in batches for all tracts within each state/county in the overlapping_tracts dataframe.
