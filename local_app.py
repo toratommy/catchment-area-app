@@ -1,13 +1,15 @@
 import streamlit as st
+from streamlit_extras.app_logo import add_logo
 import folium
 from streamlit_folium import folium_static
 from openrouteservice import client
-import yaml
 import pandas as pd
 import geopandas as gpd
 from census import Census
 import time
-from utils import *
+from src.utils import *
+import yaml
+import pickle
 
 # Load configuration variables
 with open('config.yml', 'r') as file:
@@ -23,6 +25,7 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
     with st.sidebar:
+        st.image('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
         st.subheader('About')
         st.caption("""📍 Welcome to Catchment Area Explorer! Generate a custom catchment 
                area defined by distance or drive time around any location in the US. 
@@ -30,11 +33,10 @@ def main():
                Utilizing 100% open-source data and tools!
                """
         )
-        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai"""
-                   )
+        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
         st.subheader('Get started: define your catchment area')
-        address = st.text_input("Enter the Address", value='233 S Wacker Dr, Chicago, IL, 60606')
+        address = st.text_input("Enter the Address", value='2834 N. Ashland Ave, Chicago, IL 60657')
         radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
         radius = st.number_input(f"Enter Radius in {radius_type.split()[1]}", min_value=1, max_value = 100, value=10)
         generate_catchment = st.button("Generate Catchment Area")
@@ -75,7 +77,7 @@ def main():
         api_url = "https://api.census.gov/data/{0}/acs/acs5".format(census_year)
         variables_df = fetch_census_variables(api_url)
         filters_dict = variables_df.groupby('Variable Group')['Variable Name'].apply(list).to_dict()
-        var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=1)
+        var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=445)
         var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
         normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
 
@@ -137,7 +139,10 @@ def main():
         
     with tab3:
         st.subheader('Overlay POI data within your catchment')
-        poi_categories = st.multiselect('Select POI categories to map',['cafe','bar','pub','restaurant','fast_food','car_wash','charging_station'])
+        # read in list of amenities
+        with open('src/amenities.pkl', 'rb') as f:
+            amenity_list = pickle.load(f)
+        poi_categories = st.multiselect('Select POI categories to map',amenity_list)
         poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
         plot_poi_data = st.button("Plot POI data")
         st.divider()
@@ -182,10 +187,8 @@ def main():
                    ''')
         st.subheader('Step-by-step guide:')
         st.subheader('Data source documentation:')
-        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai"""
-                   )
+        st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         
 # Run app
-
 if __name__ == "__main__":
     main()
