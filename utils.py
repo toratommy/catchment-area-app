@@ -16,9 +16,24 @@ from folium.plugins import HeatMap
 from shapely.geometry import mapping
 
 def draw_circle(catchment_map, location, radius):
-    """Draw a circle on the map."""
-        
-        # Create a point from the location
+    """
+    Draws a circle on a map at a specified location and radius.
+    
+    Parameters
+    ----------
+    catchment_map : folium.Map
+        The map on which to draw the circle.
+    location : geopy.location.Location
+        The central point of the circle.
+    radius : float
+        The radius of the circle in meters.
+    
+    Returns
+    -------
+    tuple
+        A tuple containing the circle polygon and its bounding box.
+    """ 
+    # Create a point from the location
     point = Point(location.longitude, location.latitude)
         
     # Create circle buffer around the point and transform back to WGS84
@@ -40,7 +55,25 @@ def draw_circle(catchment_map, location, radius):
     return circle_poly, bounds
 
 def draw_drive_time_area(catchment_map, location, drive_time, client):
-    """Draw an area based on drive time."""
+    """
+    Draws an area based on drive time from a specified location.
+    
+    Parameters
+    ----------
+    catchment_map : folium.Map
+        The map on which to draw the drive time area.
+    location : geopy.location.Location
+        The central point from which to calculate drive time area.
+    drive_time : int
+        The drive time in minutes.
+    client : openrouteservice.Client
+        The client to use for OpenRouteService API requests.
+    
+    Returns
+    -------
+    shapely.geometry.Polygon
+        The polygon representing the drive time area.
+    """
     coordinates = [[location.longitude, location.latitude]]
     params = {
         'locations': coordinates,
@@ -57,7 +90,19 @@ def draw_drive_time_area(catchment_map, location, drive_time, client):
     return response_poly, bounds
 
 def geocode_address(address):
-    """Geocode an address using Nominatim."""
+    """
+    Geocodes an address to a latitude and longitude.
+    
+    Parameters
+    ----------
+    address : str
+        The address to geocode.
+    
+    Returns
+    -------
+    geopy.location.Location or None
+        The location object for the address or None if geocoding fails.
+    """
     geolocator = Nominatim(user_agent="streamlit_catchment_app")
     try:
         return geolocator.geocode(address)
@@ -67,10 +112,17 @@ def geocode_address(address):
 @st.cache_data    
 def fetch_census_variables(api_url):
     """
-    Fetch the variables.json from the Census API.
-
-    :param api_url: The base URL for the Census API endpoint containing the variables.json file.
-    :return: A dictionary containing the variables and their metadata, or None if the fetch fails.
+    Fetches census variables from the U.S. Census API.
+    
+    Parameters
+    ----------
+    api_url : str
+        The base URL for the Census API endpoint.
+    
+    Returns
+    -------
+    pandas.DataFrame or None
+        A DataFrame containing the census variables and metadata, or None if the fetch fails.
     """
     variables_url = f"{api_url}/variables.json"
     try:
@@ -89,7 +141,17 @@ def fetch_census_variables(api_url):
 @st.cache_data    
 def load_state_boundaries(census_year):
     """
-    Load state boundaries using the US Census Bureau's cartographic boundary files.
+    Loads state boundaries using the US Census Bureau's cartographic boundary files for a given year.
+    
+    Parameters
+    ----------
+    census_year : str
+        The census year for which to load state boundaries.
+    
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        A GeoDataFrame containing the state boundaries.
     """
     url = "https://www2.census.gov/geo/tiger/GENZ{0}/shp/cb_{0}_us_state_20m.zip".format(census_year)
     gdf = gpd.read_file(url)
@@ -97,7 +159,19 @@ def load_state_boundaries(census_year):
 
 def find_intersecting_states(user_gdf, states_gdf):
     """
-    Find states that intersect with the user-defined geography.
+    Identifies states that intersect with a user-defined geography.
+    
+    Parameters
+    ----------
+    user_gdf : geopandas.GeoDataFrame
+        The user-defined geography.
+    states_gdf : geopandas.GeoDataFrame
+        The GeoDataFrame containing state boundaries.
+    
+    Returns
+    -------
+    pandas.Series
+        The GEOID of states that intersect with the user-defined geography.
     """
     intersecting_states = states_gdf[states_gdf.intersects(user_gdf.unary_union)]
     return intersecting_states['GEOID']
@@ -105,7 +179,19 @@ def find_intersecting_states(user_gdf, states_gdf):
 @st.cache_data
 def load_tract_shapefile(state_code, census_year):
     """
-    Load a census tract shapefile directly from the Census website for a given state code.
+    Loads a census tract shapefile from the Census website for a given state code and year.
+    
+    Parameters
+    ----------
+    state_code : str
+        The state code for which to load the census tract shapefile.
+    census_year : str
+        The year of the census.
+    
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        A GeoDataFrame containing the census tract shapefile data.
     """
     url = f"https://www2.census.gov/geo/tiger/TIGER{census_year}/TRACT/tl_{census_year}_{state_code}_tract.zip"
     gdf = gpd.read_file(url)
@@ -113,8 +199,21 @@ def load_tract_shapefile(state_code, census_year):
 
 def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
     """
-    Calculate which tracts overlap with the user-defined geography for the intersecting states,
-    considering a tract as overlapping only if >50% of its area is covered by the user geo.
+    Calculates which tracts overlap with the user-defined geography for intersecting states.
+    
+    Parameters
+    ----------
+    user_gdf : geopandas.GeoDataFrame
+        The user-defined geography.
+    state_codes : list of str
+        The state codes of the intersecting states.
+    census_year : str
+        The year of the census data.
+    
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        A GeoDataFrame of overlapping tracts.
     """
     overlapping_tracts = gpd.GeoDataFrame()
     for state_code in state_codes:
@@ -138,8 +237,25 @@ def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
 
 def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization):
     """
-    Fetch census data in batches for all tracts within each state/county in the overlapping_tracts dataframe.
-    Then, filter the resulting fetched data to only include tracts that are indeed overlapping.
+    Fetches census data for tracts within overlapping tracts dataframe.
+    
+    Parameters
+    ----------
+    census_api : census.Census
+        The Census API client.
+    census_year : str
+        The year of the census.
+    variables : list of str
+        The list of variables to fetch.
+    overlapping_tracts : geopandas.GeoDataFrame
+        The GeoDataFrame of overlapping tracts.
+    normalization : str
+        Indicates if the data should be normalized.
+    
+    Returns
+    -------
+    pandas.DataFrame
+        A DataFrame containing the fetched census data.
     """
     # Prepare an empty DataFrame to hold fetched census data
     all_census_data = pd.DataFrame()
@@ -171,11 +287,28 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
 
 def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
     """
-    Plot tracts on a Folium map, colored by a specified census variable.
+    Plots census data on a map, coloring tracts by a specified census variable.
     
-    :param overlapping_tracts_gdf: GeoDataFrame containing the geometries of the tracts.
-    :param census_data: DataFrame containing the census data for the tracts.
-    :param census_variable: The census variable to color the tracts by.
+    Parameters
+    ----------
+    catchment_map : folium.Map
+        The map on which to plot the census data.
+    bounds : tuple
+        The bounds to fit the map around the plotted data.
+    overlapping_tracts_gdf : geopandas.GeoDataFrame
+        The GeoDataFrame containing the geometries of the tracts.
+    census_data : pandas.DataFrame
+        The DataFrame containing the census data for the tracts.
+    census_variable : str
+        The census variable to color the tracts by.
+    var_name : str
+        The name of the variable (for display purposes).
+    normalization : str
+        Indicates if the data should be normalized.
+    
+    Returns
+    -------
+    None
     """
     # Merge the census data with the tract geometries
     merged_data = overlapping_tracts_gdf.merge(census_data, left_on='GEOID', right_on='GEOID')
@@ -209,7 +342,19 @@ def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, censu
     
 def get_color(value, deciles):
     """
-    Determine color based on which decile the value falls into.
+    Determines the color for a value based on which decile it falls into.
+    
+    Parameters
+    ----------
+    value : float
+       The value to be colored.
+    deciles : list of float
+        The decile thresholds for coloring.
+    
+    Returns
+    -------
+    str
+        The color code for the given value based on its decile.
     """
     colors = ['#ffffcc', '#ffeda0', '#fed976', '#feb24c', '#fd8d3c',
               '#fc4e2a', '#e31a1c', '#bd0026', '#800026', '#66001a']
@@ -222,6 +367,19 @@ def get_color(value, deciles):
     return colors[-1]  # Use the last color for values in the highest decile
 
 def calculate_area_sq_miles(user_poly):
+    """
+    Calculates the area of a user-defined polygon in square miles.
+
+    Parameters
+    ----------
+    user_poly : shapely.geometry.Polygon
+        A polygon in latitude and longitude coordinates.
+
+    Returns
+    -------
+    float
+        The area of the polygon in square miles.
+    """
     proj = partial(pyproj.transform,
                    pyproj.Proj(init='epsg:4326'),  # Source coordinate system (WGS84)
                    pyproj.Proj(proj='aea', lat_1=user_poly.bounds[1], lat_2=user_poly.bounds[3]))  # Albers Equal Area projection
@@ -231,6 +389,25 @@ def calculate_area_sq_miles(user_poly):
     return area_sq_miles
 
 def create_distribution_plot(census_data, variables, var_name, normalization):
+    """
+    Creates a distribution plot for a specified census variable.
+
+    Parameters
+    ----------
+    census_data : pandas.DataFrame
+        The census data containing variables of interest.
+    variables : list of str
+        The census variables to include in the plot.
+    var_name : str
+        The name of the variable to be plotted.
+    normalization : str
+        Indicates whether the data should be normalized.
+
+    Returns
+    -------
+    plotly.graph_objs.Figure
+        The figure object containing the distribution plot.
+    """
     # Create distplot with custom bin_size
     if normalization == 'Yes':
         dist_data = census_data[census_data[variables[0]]>0]['population_normalized']
@@ -252,12 +429,17 @@ def fetch_poi_within_catchment(catchment_polygon, category):
     """
     Fetch points of interest within a specified catchment area polygon and category.
 
-    Parameters:
-    - catchment_polygon: A Shapely Polygon defining the catchment area.
-    - category: A string representing the OSM category of interest (e.g., 'cafe', 'restaurant').
+    Parameters
+    ----------
+    catchment_polygon: 
+        A Shapely Polygon defining the catchment area.
+    category: 
+        A string representing the OSM category of interest (e.g., 'cafe', 'restaurant').
 
     Returns:
-    - GeoDataFrame containing the fetched POIs.
+    -------
+    GeoDataFrame()
+        GeoDataFrame containing the fetched POI data.
     """
     try:
         # Define the tags for OSM queries based on the specified category
@@ -277,6 +459,23 @@ def fetch_poi_within_catchment(catchment_polygon, category):
         return gpd.GeoDataFrame()  
     
 def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
+    """
+    Plots POI data on a map, either as markers or a heatmap, based on the specified map type.
+    
+    Parameters
+    ----------
+    pois_gdf : geopandas.GeoDataFrame
+        The GeoDataFrame containing POI data.
+    catchment_polygon : shapely.geometry.Polygon
+        The polygon defining the catchment area.
+    map_type : str
+        The type of map to plot ('POI markers' or 'Heatmap (POI density)').
+    
+    Returns
+    -------
+    folium.Map
+        The map with POI data plotted.
+    """
     # Create a map centered around the catchment area
     map_center = [catchment_polygon.centroid.y, catchment_polygon.centroid.x]
     m = folium.Map(location=map_center, zoom_start=13)
@@ -306,6 +505,18 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
     return m
 
 def display_poi_counts(pois_gdf):
+    """
+    Displays the total counts of POI locations by category.
+    
+    Parameters
+    ----------
+    pois_gdf : geopandas.GeoDataFrame
+        The GeoDataFrame containing POI data.
+    
+    Returns
+    -------
+    None
+    """
     # Assuming 'amenity' column stores the POI category
     if not pois_gdf.empty and 'amenity' in pois_gdf.columns:
         counts = pois_gdf['amenity'].value_counts()
