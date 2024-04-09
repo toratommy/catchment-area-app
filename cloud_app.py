@@ -7,13 +7,9 @@ import pandas as pd
 import geopandas as gpd
 from census import Census
 import time
-from utils import *
+from src.utils import *
 import pickle
 
-# TO DO's
-# Add sum of census var under total population. If not a pop var, display N/A (variable does not represent pop.)
-# Add caching
-# Finalize docs
 
 # Initialize configuration variables
 ors_client = client.Client(key=st.secrets['openroute_api_key'])
@@ -140,7 +136,7 @@ def main():
     with tab3:
         st.subheader('Overlay POI data within your catchment')
         # read in list of amenities
-        with open('amenities.pkl', 'rb') as f:
+        with open('src/amenities.pkl', 'rb') as f:
             amenity_list = pickle.load(f)
         poi_categories = st.multiselect('Select POI categories to map',amenity_list)
         poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
