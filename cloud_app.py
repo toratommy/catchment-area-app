@@ -10,7 +10,6 @@ import time
 from src.utils import *
 import pickle
 
-
 # Initialize configuration variables
 ors_client = client.Client(key=st.secrets['openroute_api_key'])
 census_year = st.secrets['census_year']
@@ -186,6 +185,5 @@ def main():
         st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         
 # Run app
-
 if __name__ == "__main__":
     main()
