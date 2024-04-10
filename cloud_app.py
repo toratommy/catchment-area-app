@@ -181,7 +181,11 @@ def main():
                    comprehensive, data-driven insights.
                    ''')
         st.subheader('Step-by-step guide:')
-        st.subheader('Data source documentation:')
+        st.subheader('Open-source Data APIs:')
+        st.markdown('- [Nominatim](https://nominatim.org/): For geocoding addresses.')
+        st.markdown('- [OpenStreetMap](https://wiki.openstreetmap.org/): For geographical data and POIs.')
+        st.markdown('- [U.S. Census Bureau](https://www.census.gov/data/developers/data-sets.html): For demographic data and census-defined geometries.')
+        st.markdown('- [OpenRouteService](https://openrouteservice.org/): For calculating drive times.')
         st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         
 # Run app
