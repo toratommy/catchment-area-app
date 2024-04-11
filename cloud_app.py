@@ -180,21 +180,21 @@ def main():
                    catchment areas, overlaying demographic data, and displaying POIs, all powered by open-source technologies for 
                    comprehensive, data-driven insights.
                    ''')
-        st.subheader('Step-by-step guide:')
+        st.subheader('Step-by-Step User Guide:')
         st.markdown('''1. Generate a Catchment Area: Using the left control panel, enter an address and radius (drive time or distance) to define your catchment area.
                     Upon clicking the `Generate Catchment Area` button, view your catchment area on the interactive map and adjust as needed by changing the 
                     parameters in the left control panel.
                     ''')
         st.markdown('''2. Overlaying Demographics: Next, navigate to the `Overlay Demographics` tab to plot population demographics within your catchment area. Select a variable of interest, 
-                    and specify whether or not you'd like to normalize by population (i.e., plotting percent of population with selected variable vs plotting total number of people).
+                    and specify whether or not you'd like to normalize by population (i.e., plotting percent of population with selected variable vs plotting total number of people with selected variable).
                     Upon clicking the `Plot Demographic Data` button, you can view the interactive heatmap of your selected variable in your catchment area, and assess the distribution
                     plot below which shows the variable's distribution across all census tracts in your catchment area.
                     ''')
-        st.markdown('''3. Overlaying Points-of-Interest: Finally, navigate to the 'POI Overlay' tab to plot points of interest within your catchment area.
-                    Select your POI categoy (e.g., cafes, fast food, dentist, car wash, etc.) and specify your map type (POI markets or heatmap). Upon clicking the
+        st.markdown('''3. Overlaying Points-of-Interest: Finally, navigate to the `POI Overlay` tab to plot points of interest within your catchment area.
+                    Select your POI categoy (e.g., cafes, fast food, dentist, car wash, etc.) and specify your map type (POI markers or heatmap). Upon clicking the
                     `Plot POI Data` button, you can view your points-of-interest within your catchment area using the interactive map.
                     ''')
-        st.subheader('Open-source Data APIs:')
+        st.subheader('Open-Source Data APIs:')
         st.markdown('- [Nominatim](https://nominatim.org/): For geocoding addresses.')
         st.markdown('- [OpenStreetMap](https://wiki.openstreetmap.org/): For geographical data and POIs.')
         st.markdown('- [U.S. Census Bureau](https://www.census.gov/data/developers/data-sets.html): For demographic data (American Community Survey) and census-defined geometries (census tracts).')
