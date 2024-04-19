@@ -24,7 +24,7 @@ def main():
         st.subheader('About')
         st.caption("""📍 Welcome to Catchment Area Explorer! Generate a custom catchment 
                area defined by distance or drive time around any location in the US. 
-               Uncover insights by overlaying key demographic and POI data within your catchemnt area. 
+               Uncover insights by overlaying key demographic and POI data within your catchment area. 
                Utilizing 100% open-source data and tools!
                """
         )
