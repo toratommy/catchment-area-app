@@ -59,7 +59,6 @@ def main():
                 catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
                 map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
                 st.caption(map_caption)
-                #st.text(st.session_state.bounds)
             else: 
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
             folium_static(catchment_map)
@@ -114,7 +113,6 @@ def main():
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
                     catchment_map = set_map_bounds(st.session_state, catchment_map)
-                    #st.text(st.session_state.bounds)
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -124,7 +122,6 @@ def main():
         else:
             catchment_map = set_map_bounds(st.session_state, catchment_map)
             folium_static(catchment_map)
-            #st.text(st.session_state.bounds)
         
     with tab3:
         st.subheader('Overlay POI data within your catchment')
