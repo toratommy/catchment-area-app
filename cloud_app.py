@@ -114,7 +114,7 @@ def main():
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
                     
                     total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
-                    st.caption('Total population in catchment: '+f'{int(total_population):,}')
+                    st.caption('Total population (across entire catchment): '+f'{int(total_population):,}')
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
                     if "bounds" in st.session_state:
