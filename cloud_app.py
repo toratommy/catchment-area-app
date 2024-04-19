@@ -16,6 +16,7 @@ census_year = st.secrets['census_year']
 census_api_key =  st.secrets['census_api_key']
 
 def main():
+    bounds = [[0, 0], [0, 0]]
     st.title("Catchment Area Explorer")
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
@@ -46,9 +47,9 @@ def main():
                     if radius_type == "Distance (miles)":
                         # Convert miles to meters for folium
                         radius_meters = radius * 1609.34
-                        st.session_state.user_poly, st.session_state.bounds = draw_circle(catchment_map, location, radius_meters)
+                        st.session_state.user_poly, bounds = draw_circle(catchment_map, location, radius_meters)
                     elif radius_type == "Drive Time (minutes)":
-                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, ors_client)
+                        st.session_state.user_poly, bounds = draw_drive_time_area(catchment_map, location, radius, ors_client)
                 catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
                 
                 location_caption = 'Location: '+address
@@ -59,7 +60,7 @@ def main():
                 catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
                 map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
                 st.caption(map_caption)
-                st.text(st.session_state.bounds)
+                st.text(bounds)
             else: 
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
             folium_static(catchment_map)
@@ -104,7 +105,7 @@ def main():
                     # Fetch census data for overlapping tracts
                     census_data = fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization)
 
-                    plot_census_data_on_map(catchment_map, st.session_state.bounds, overlapping_tracts, census_data, variables[0], var_name, normalization)
+                    plot_census_data_on_map(catchment_map, bounds, overlapping_tracts, census_data, variables[0], var_name, normalization)
 
                     # Generate distribution plot
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
@@ -114,7 +115,7 @@ def main():
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
                     catchment_map = set_map_bounds(st.session_state, catchment_map)
-                    st.text(st.session_state.bounds)
+                    st.text(bounds)
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -123,7 +124,7 @@ def main():
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
             catchment_map = set_map_bounds(st.session_state, catchment_map)
-            #st.text(st.session_state.bounds)
+            #st.text(st.bounds)
             folium_static(catchment_map)
         
     with tab3:
@@ -154,13 +155,13 @@ def main():
                     pois_gdf = fetch_poi_within_catchment(st.session_state.user_poly, poi_categories)
                 display_poi_counts(pois_gdf)
                 catchment_map = plot_poi_data_on_map(pois_gdf, st.session_state.user_poly, poi_map_type)
-                catchment_map.fit_bounds(st.session_state.bounds)
+                catchment_map.fit_bounds(bounds)
                 folium_static(catchment_map)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
             if "bounds" in st.session_state:
-                catchment_map.fit_bounds(st.session_state.bounds)
+                catchment_map.fit_bounds(bounds)
             folium_static(catchment_map)
 
     with tab4:
