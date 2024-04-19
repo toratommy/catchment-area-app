@@ -119,7 +119,9 @@ def main():
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
                     
                     total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
-                    st.caption('Estimated total population: '+str(total_population) )
+                    st.caption('Total population in catchment: '+str(total_population) )
+                    if ('Total:' in var_name) or ('Aggregate' in var_name):
+                        st.caption('Sum (across entire catchment) of `'+var_name.lower()+'`: '+str(round(sum(census_data[variables[0]]),0)))
                     map_caption = 'Heatmap of '+var_group+' - '+var_name
                     st.caption(map_caption)
                     if "bounds" in st.session_state:
@@ -127,8 +129,6 @@ def main():
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
-                    if ('Total:' in var_name) or ('Aggregate' in var_name):
-                        st.caption('Sum (across entire catchment) of ***'+var_name+'***: '+str(round(sum(census_data[variables[0]]),0)))
                     st.plotly_chart(fig, use_container_width=True)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
