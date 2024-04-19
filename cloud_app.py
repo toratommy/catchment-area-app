@@ -61,6 +61,7 @@ def main():
                 st.caption(map_caption)
             else: 
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
+            st.text(st.session_state.bounds)
             folium_static(catchment_map)
         else:
             st.error("Could not geocode the address. Please try another address.")
@@ -113,6 +114,7 @@ def main():
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
                     catchment_map = set_map_bounds(st.session_state, catchment_map)
+                    st.text(st.session_state.bounds)
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -120,8 +122,8 @@ def main():
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
-            if "bounds" in st.session_state:
-                catchment_map.fit_bounds(st.session_state.bounds)
+            catchment_map = set_map_bounds(st.session_state, catchment_map)
+            st.text(st.session_state.bounds)
             folium_static(catchment_map)
         
     with tab3:
