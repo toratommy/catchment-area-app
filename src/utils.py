@@ -17,7 +17,6 @@ from shapely.geometry import mapping
 
 @st.experimental_fragment
 def make_catchment_area_selections():
-    st.subheader('Get started: define your catchment area')
     address = st.text_input("Enter the Address", value='2834 N. Ashland Ave, Chicago, IL 60657')
     radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
     radius = st.number_input(f"Enter Radius in {radius_type.split()[1]}", min_value=1, max_value = 100, value=10)
@@ -29,6 +28,12 @@ def make_census_variable_selections(filters_dict):
     var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
     normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
     return var_group, var_name, normalization
+
+@st.experimental_fragment
+def make_poi_selections(amenity_list):
+    poi_categories = st.multiselect('Select POI categories to map',amenity_list)
+    poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
+    return poi_categories, poi_map_type
 
 def draw_circle(catchment_map, location, radius):
     """

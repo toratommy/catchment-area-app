@@ -30,6 +30,7 @@ def main():
         )
         st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
+        st.subheader('Get started: define your catchment area')
         address, radius_type, radius = make_catchment_area_selections()
         generate_catchment = st.button("Generate Catchment Area")
         st.divider()
@@ -129,8 +130,7 @@ def main():
         # read in list of amenities
         with open('src/amenities.pkl', 'rb') as f:
             amenity_list = pickle.load(f)
-        poi_categories = st.multiselect('Select POI categories to map',amenity_list)
-        poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
+        poi_categories, poi_map_type = make_poi_selections(amenity_list)
         plot_poi_data = st.button("Plot POI data")
         st.divider()
         if "user_poly" in st.session_state:
