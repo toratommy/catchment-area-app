@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_extras.app_logo import add_logo
 import folium
-from streamlit_folium import folium_static
+from streamlit_folium import folium_static, st_folium
 from openrouteservice import client
 import pandas as pd
 import geopandas as gpd
@@ -62,7 +62,7 @@ def main():
                 st.text(st.session_state.bounds)
             else: 
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
-            folium_static(catchment_map)
+            st_folium(catchment_map)
         else:
             st.error("Could not geocode the address. Please try another address.")
 
@@ -115,7 +115,7 @@ def main():
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
                     catchment_map = set_map_bounds(st.session_state, catchment_map)
                     st.text(st.session_state.bounds)
-                    folium_static(catchment_map)
+                    st_folium(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
                     st.plotly_chart(fig, use_container_width=True)
@@ -123,7 +123,7 @@ def main():
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
             catchment_map = set_map_bounds(st.session_state, catchment_map)
-            folium_static(catchment_map.fit_bounds(st.session_state.bounds))
+            st_folium(catchment_map.fit_bounds(st.session_state.bounds))
             st.text(st.session_state.bounds)
         
     with tab3:
@@ -155,13 +155,13 @@ def main():
                 display_poi_counts(pois_gdf)
                 catchment_map = plot_poi_data_on_map(pois_gdf, st.session_state.user_poly, poi_map_type)
                 catchment_map.fit_bounds(st.session_state.bounds)
-                folium_static(catchment_map)
+                st_folium(catchment_map)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
             if "bounds" in st.session_state:
                 catchment_map.fit_bounds(st.session_state.bounds)
-            folium_static(catchment_map)
+            st_folium(catchment_map)
 
     with tab4:
         st.subheader('Overview')
