@@ -61,7 +61,7 @@ def main():
                 st.caption(map_caption)
             else: 
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
-            #st.text(st.session_state.bounds)
+            st.text(st.session_state.bounds)
             folium_static(catchment_map)
         else:
             st.error("Could not geocode the address. Please try another address.")
