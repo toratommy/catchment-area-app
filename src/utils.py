@@ -36,6 +36,11 @@ def make_poi_selections(amenity_list):
     return poi_categories, poi_map_type
 
 @st.experimental_fragment
+def set_map_bounds(session_state, catchment_map):
+    if "bounds" in session_state:
+        catchment_map.fit_bounds(session_state.bounds)
+    return catchment_map
+
 def draw_circle(catchment_map, location, radius):
     """
     Draws a circle on a map at a specified location and radius.
@@ -75,7 +80,6 @@ def draw_circle(catchment_map, location, radius):
     catchment_map.fit_bounds(bounds)
     return circle_poly, bounds
 
-@st.experimental_fragment
 def draw_drive_time_area(catchment_map, location, drive_time, client):
     """
     Draws an area based on drive time from a specified location.
@@ -307,7 +311,6 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
 
     return all_census_data
 
-@st.experimental_fragment
 def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
     """
     Plots census data on a map, coloring tracts by a specified census variable.
@@ -480,8 +483,7 @@ def fetch_poi_within_catchment(catchment_polygon, category):
     except Exception as e:
         print(f"An error occurred while fetching POIs: {e}")
         return gpd.GeoDataFrame()  
-
-@st.experimental_fragment    
+    
 def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
     """
     Plots POI data on a map, either as markers or a heatmap, based on the specified map type.

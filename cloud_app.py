@@ -34,39 +34,36 @@ def main():
         address, radius_type, radius = make_catchment_area_selections()
         generate_catchment = st.button("Generate Catchment Area")
         st.divider()
-    
-    @st.experimental_fragment
-    def tab_1(tab1):
-        with tab1:
-            st.subheader('Catchment area charateristics')
-            # geocode location and generate catchment area
-            location = geocode_address(address)
-            if location:
-                catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
-                if generate_catchment:
-                    with st.spinner('Generating catchment area...'):
-                        if radius_type == "Distance (miles)":
-                            # Convert miles to meters for folium
-                            radius_meters = radius * 1609.34
-                            st.session_state.user_poly, st.session_state.bounds = draw_circle(catchment_map, location, radius_meters)
-                        elif radius_type == "Drive Time (minutes)":
-                            st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, ors_client)
-                    catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
-                    
-                    location_caption = 'Location: '+address
-                    if radius_type == 'Distance (miles)':
-                        radius_caption = 'Catchment radius: '+str(radius)+' miles'
-                    else: 
-                        radius_caption = 'Catchment radius: '+str(radius)+' minute drive'
-                    catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
-                    map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
-                    st.caption(map_caption)
+
+    with tab1:
+        st.subheader('Catchment area charateristics')
+        # geocode location and generate catchment area
+        location = geocode_address(address)
+        if location:
+            catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
+            if generate_catchment:
+                with st.spinner('Generating catchment area...'):
+                    if radius_type == "Distance (miles)":
+                        # Convert miles to meters for folium
+                        radius_meters = radius * 1609.34
+                        st.session_state.user_poly, st.session_state.bounds = draw_circle(catchment_map, location, radius_meters)
+                    elif radius_type == "Drive Time (minutes)":
+                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, ors_client)
+                catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
+                
+                location_caption = 'Location: '+address
+                if radius_type == 'Distance (miles)':
+                    radius_caption = 'Catchment radius: '+str(radius)+' miles'
                 else: 
-                    st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
-                folium_static(catchment_map)
-            else:
-                st.error("Could not geocode the address. Please try another address.")
-    tab_1(tab1)
+                    radius_caption = 'Catchment radius: '+str(radius)+' minute drive'
+                catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
+                map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
+                st.caption(map_caption)
+            else: 
+                st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
+            folium_static(catchment_map)
+        else:
+            st.error("Could not geocode the address. Please try another address.")
 
     with tab2:
         st.subheader('Overlay demographic data within your catchment')
@@ -115,8 +112,7 @@ def main():
                     st.caption('Total population (across entire catchment): '+f'{int(total_population):,}')
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
-                    if "bounds" in st.session_state:
-                        catchment_map.fit_bounds(st.session_state.bounds)
+                    catchment_map = set_map_bounds(st.session_state, catchment_map)
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -127,7 +123,7 @@ def main():
             if "bounds" in st.session_state:
                 catchment_map.fit_bounds(st.session_state.bounds)
             folium_static(catchment_map)
-
+        
     with tab3:
         st.subheader('Overlay POI data within your catchment')
         # read in list of amenities
