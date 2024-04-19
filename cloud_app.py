@@ -123,7 +123,7 @@ def main():
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
             catchment_map = set_map_bounds(st.session_state, catchment_map)
-            folium_static(catchment_map)
+            folium_static(catchment_map.fit_bounds(st.session_state.bounds))
             st.text(st.session_state.bounds)
         
     with tab3:
