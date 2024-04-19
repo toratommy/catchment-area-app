@@ -122,7 +122,7 @@ def main():
                     st.caption('Total population in catchment: '+str(total_population) )
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_name.lower()+'`: '+str(round(sum(census_data[variables[0]]),0)))
-                    map_caption = 'Heatmap of '+var_group+' - '+var_name
+                    map_caption = 'Heatmap of `'+var_group+'` - `'+var_name+'`'
                     st.caption(map_caption)
                     if "bounds" in st.session_state:
                         catchment_map.fit_bounds(st.session_state.bounds)
