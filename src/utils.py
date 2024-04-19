@@ -21,8 +21,7 @@ def make_catchment_area_selections():
     address = st.text_input("Enter the Address", value='2834 N. Ashland Ave, Chicago, IL 60657')
     radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
     radius = st.number_input(f"Enter Radius in {radius_type.split()[1]}", min_value=1, max_value = 100, value=10)
-    generate_catchment = st.button("Generate Catchment Area")
-    return address, radius_type, radius, generate_catchment
+    return address, radius_type, radius
 
 def draw_circle(catchment_map, location, radius):
     """

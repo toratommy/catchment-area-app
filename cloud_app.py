@@ -30,7 +30,8 @@ def main():
         )
         st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
-        address, radius_type, radius, generate_catchment = make_catchment_area_selections()
+        address, radius_type, radius = make_catchment_area_selections()
+        generate_catchment = st.button("Generate Catchment Area")
         st.divider()
 
     with tab1:
