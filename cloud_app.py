@@ -69,10 +69,7 @@ def main():
         api_url = "https://api.census.gov/data/{0}/acs/acs5".format(census_year)
         variables_df = fetch_census_variables(api_url)
         filters_dict = variables_df.groupby('Variable Group')['Variable Name'].apply(list).to_dict()
-        var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=445)
-        var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
-        normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
-
+        var_group, var_name, normalization = make_census_variable_selections(filters_dict)
         plot_census_data = st.button("Plot Demographic Data")
         st.divider()
         if "user_poly" in st.session_state:

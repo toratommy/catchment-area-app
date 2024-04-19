@@ -23,6 +23,13 @@ def make_catchment_area_selections():
     radius = st.number_input(f"Enter Radius in {radius_type.split()[1]}", min_value=1, max_value = 100, value=10)
     return address, radius_type, radius
 
+@st.experimental_fragment
+def make_census_variable_selections(filters_dict):
+    var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=445)
+    var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
+    normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
+    return var_group, var_name, normalization
+
 def draw_circle(catchment_map, location, radius):
     """
     Draws a circle on a map at a specified location and radius.
