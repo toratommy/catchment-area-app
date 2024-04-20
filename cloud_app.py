@@ -16,6 +16,13 @@ census_year = st.secrets['census_year']
 census_api_key =  st.secrets['census_api_key']
 
 def main():
+    # set theme
+    st._config.set_option(f'theme.backgroundColor' ,"white" )
+    st._config.set_option(f'theme.base' ,"light" )
+    st._config.set_option(f'theme.primaryColor' ,"#5591f5" )
+    st._config.set_option(f'theme.secondaryBackgroundColor' ,"#82E1D7" )
+    st._config.set_option(f'theme.textColor' ,"#0a1464")
+
     st.title("Catchment Area Explorer")
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
@@ -112,7 +119,6 @@ def main():
                     st.caption('Total population (across entire catchment): '+f'{int(total_population):,}')
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
-                    catchment_map = set_map_bounds(st.session_state, catchment_map)
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -120,7 +126,6 @@ def main():
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
-            catchment_map = set_map_bounds(st.session_state, catchment_map)
             folium_static(catchment_map)
         
     with tab3:
