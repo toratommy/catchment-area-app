@@ -17,6 +17,15 @@ from shapely.geometry import mapping
 
 @st.experimental_fragment
 def make_catchment_area_selections():
+    """
+    Display widgets to collect user inputs for generating a catchment area.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the entered address as a string, the selected radius type as a string,
+        and the specified radius as an integer.
+    """
     address = st.text_input("Enter the Address", value='2834 N. Ashland Ave, Chicago, IL 60657')
     radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
     radius = st.number_input(f"Enter Radius {radius_type.split()[-1]}", min_value=1, max_value = 100, value=10)
@@ -24,6 +33,20 @@ def make_catchment_area_selections():
 
 @st.experimental_fragment
 def make_census_variable_selections(filters_dict):
+    """
+    Display widgets to select demographic variables for data enrichment.
+
+    Parameters
+    ----------
+    filters_dict : dict
+        A dictionary with demographic variable groups as keys and lists of variable names as values.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the selected variable group as a string, the selected variable name as a string,
+        and the normalization preference as a string.
+    """
     var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=445)
     var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
     normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
@@ -31,15 +54,22 @@ def make_census_variable_selections(filters_dict):
 
 @st.experimental_fragment
 def make_poi_selections(amenity_list):
+    """
+    Display widgets for selecting POI categories and mapping preferences.
+
+    Parameters
+    ----------
+    amenity_list : list
+        A list of POI categories to choose from.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the list of selected POI categories as a list of strings, and the chosen map type as a string.
+    """
     poi_categories = st.multiselect('Select POI categories to map',amenity_list)
     poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
     return poi_categories, poi_map_type
-
-@st.experimental_fragment
-def set_map_bounds(session_state, catchment_map):
-    if "bounds" in session_state:
-        catchment_map.fit_bounds(session_state.bounds)
-    return catchment_map
 
 def draw_circle(catchment_map, location, radius):
     """
