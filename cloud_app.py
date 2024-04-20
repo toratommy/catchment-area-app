@@ -17,11 +17,7 @@ census_api_key =  st.secrets['census_api_key']
 
 def main():
     # set theme
-    st._config.set_option(f'theme.backgroundColor' ,"white" )
     st._config.set_option(f'theme.base' ,"light" )
-    st._config.set_option(f'theme.primaryColor' ,"#5591f5" )
-    st._config.set_option(f'theme.secondaryBackgroundColor' ,"#82E1D7" )
-    st._config.set_option(f'theme.textColor' ,"#0a1464")
 
     st.title("Catchment Area Explorer")
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
