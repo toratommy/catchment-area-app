@@ -26,7 +26,7 @@ def make_catchment_area_selections():
         A tuple containing the entered address as a string, the selected radius type as a string,
         and the specified radius as an integer.
     """
-    address = st.text_input("Enter the Address", value='2834 N. Ashland Ave, Chicago, IL 60657')
+    address = st.text_input("Enter the Address", value='1 N Halsted St, Chicago, IL 60661')
     radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
     radius = st.number_input(f"Enter Radius {radius_type.split()[-1]}", min_value=1, max_value = 100, value=10)
     return address, radius_type, radius
