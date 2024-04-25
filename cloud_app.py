@@ -9,6 +9,7 @@ from census import Census
 import time
 from src.utils import *
 import pickle
+from folium.plugins import Fullscreen
 
 # Initialize configuration variables
 ors_client = client.Client(key=st.secrets['openroute_api_key'])
