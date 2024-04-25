@@ -9,6 +9,9 @@ config.yml
 # C extensions
 *.so
 
+# cache files
+*.json
+
 # Distribution / packaging
 .Python
 build/
