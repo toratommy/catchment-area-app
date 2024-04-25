@@ -10,6 +10,16 @@ import time
 from src.utils import *
 import yaml
 import pickle
+from folium.plugins import Fullscreen
+
+# TO DO: 
+# add option for map base layer
+# add bar chart to POI page
+# add pop density to POI page
+# add distance to nearest on POI page
+# add census data profiles
+# scale down for small cathcmnet areas; use to total pop returned value in ORS. also update map to include only in catchment
+# add real estate data
 
 # Load configuration variables
 with open('config.yml', 'r') as file:
@@ -21,6 +31,13 @@ census_year = config_vars['census_year']
 census_api_key =  config_vars['census_api_key']
 
 def main():
+    # set theme
+    st._config.set_option(f'theme.base' ,"light" )
+    st._config.set_option(f'theme.primaryColor',"#f63366")
+    st._config.set_option(f'theme.backgroundColor',"#FFFFFF")
+    st._config.set_option(f'theme.secondaryBackgroundColor', "#f0f2f6")
+    st._config.set_option(f'theme.textColor',"#262730")
+
     st.title("Catchment Area Explorer")
     tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
     # User inputs
@@ -29,33 +46,40 @@ def main():
         st.subheader('About')
         st.caption("""📍 Welcome to Catchment Area Explorer! Generate a custom catchment 
                area defined by distance or drive time around any location in the US. 
-               Uncover insights by overlaying key demographic and POI data within your catchemnt area. 
+               Uncover insights by overlaying key demographic and POI data within your catchment area. 
                Utilizing 100% open-source data and tools!
                """
         )
         st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
         st.subheader('Get started: define your catchment area')
-        address = st.text_input("Enter the Address", value='2834 N. Ashland Ave, Chicago, IL 60657')
-        radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
-        radius = st.number_input(f"Enter Radius in {radius_type.split()[1]}", min_value=1, max_value = 100, value=10)
+        address, radius_type, travel_profile, radius = make_catchment_area_selections()
         generate_catchment = st.button("Generate Catchment Area")
         st.divider()
 
     with tab1:
         st.subheader('Catchment area charateristics')
+        tile_layer_value, tile_layer_type  = map_tile_layer_selections()
+        
         # geocode location and generate catchment area
         location = geocode_address(address)
         if location:
-            catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
+            # set tile layer and initialize map
+            if tile_layer_type == 'WMS':
+                catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
+                tile_layer_value.add_to(catchment_map)
+            else:
+                catchment_map = folium.Map(location=[location.latitude, location.longitude], tiles=tile_layer_value, zoom_start=13)
+            # add full screen to map
+            Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(catchment_map)
             if generate_catchment:
                 with st.spinner('Generating catchment area...'):
                     if radius_type == "Distance (miles)":
                         # Convert miles to meters for folium
                         radius_meters = radius * 1609.34
                         st.session_state.user_poly, st.session_state.bounds = draw_circle(catchment_map, location, radius_meters)
-                    elif radius_type == "Drive Time (minutes)":
-                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, ors_client)
+                    elif radius_type == "Travel time (minutes)":
+                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, travel_profile, ors_client)
                 catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
                 
                 location_caption = 'Location: '+address
@@ -77,10 +101,7 @@ def main():
         api_url = "https://api.census.gov/data/{0}/acs/acs5".format(census_year)
         variables_df = fetch_census_variables(api_url)
         filters_dict = variables_df.groupby('Variable Group')['Variable Name'].apply(list).to_dict()
-        var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=445)
-        var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
-        normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
-
+        var_group, var_name, normalization = make_census_variable_selections(filters_dict)
         plot_census_data = st.button("Plot Demographic Data")
         st.divider()
         if "user_poly" in st.session_state:
@@ -119,13 +140,9 @@ def main():
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
                     
                     total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
-                    st.caption('Total population in catchment: '+str(total_population) )
+                    st.caption('Total population (across entire catchment): '+f'{int(total_population):,}')
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
-                        st.caption('Sum (across entire catchment) of `'+var_name.lower()+'`: '+str(round(sum(census_data[variables[0]]),0)))
-                    map_caption = 'Heatmap of `'+var_group+'` - `'+var_name+'`'
-                    st.caption(map_caption)
-                    if "bounds" in st.session_state:
-                        catchment_map.fit_bounds(st.session_state.bounds)
+                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
                     folium_static(catchment_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -133,8 +150,6 @@ def main():
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
-            if "bounds" in st.session_state:
-                catchment_map.fit_bounds(st.session_state.bounds)
             folium_static(catchment_map)
         
     with tab3:
@@ -142,8 +157,7 @@ def main():
         # read in list of amenities
         with open('src/amenities.pkl', 'rb') as f:
             amenity_list = pickle.load(f)
-        poi_categories = st.multiselect('Select POI categories to map',amenity_list)
-        poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
+        poi_categories, poi_map_type = make_poi_selections(amenity_list)
         plot_poi_data = st.button("Plot POI data")
         st.divider()
         if "user_poly" in st.session_state:
