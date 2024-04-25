@@ -26,10 +26,24 @@ def make_catchment_area_selections():
         A tuple containing the entered address as a string, the selected radius type as a string,
         and the specified radius as an integer.
     """
-    address = st.text_input("Enter the Address", value='1 N Halsted St, Chicago, IL 60661')
-    radius_type = st.selectbox("Enter Radius Type", ["Distance (miles)", "Drive Time (minutes)"], index = 1)
-    radius = st.number_input(f"Enter Radius {radius_type.split()[-1]}", min_value=1, max_value = 60, value=10)
-    return address, radius_type, radius
+    address = st.text_input("Enter the Address", 
+                            value='1 N Halsted St, Chicago, IL 60661')
+    radius_type = st.selectbox("Enter Radius Type", 
+                               ["Distance (miles)", "Travel time (minutes)"], 
+                               index = 1)
+    if radius_type ==  'Travel time (minutes)':
+        travel_profile = st.selectbox("Select Travel Profile",
+                                      ["Driving (car)","Driving (heavy goods vehicle)","Walking","Cycling (regular)","Cycling (road)","Cycling (mountain)","Cycling (electric)","Hiking","Wheelchair"])
+        max_radius = 60
+    else:
+        travel_profile = None
+        max_radius = 250
+    radius = st.number_input(f"Enter Radius {radius_type.split()[-1]}", 
+                             min_value=1, 
+                             max_value=max_radius, 
+                             value=10,
+                             help="The max supported travel time radius is 60 minutes. Please set radius type to `Distance (miles)` if you with to generate a larger area.")
+    return address, radius_type, travel_profile, radius
 
 @st.experimental_fragment
 def make_census_variable_selections(filters_dict):
@@ -110,7 +124,7 @@ def draw_circle(catchment_map, location, radius):
     catchment_map.fit_bounds(bounds)
     return circle_poly, bounds
 
-def draw_drive_time_area(catchment_map, location, drive_time, client):
+def draw_drive_time_area(catchment_map, location, drive_time, travel_profile, client):
     """
     Draws an area based on drive time from a specified location.
     
@@ -130,11 +144,22 @@ def draw_drive_time_area(catchment_map, location, drive_time, client):
     shapely.geometry.Polygon
         The polygon representing the drive time area.
     """
+    travel_profile_dict = {"Driving (car)":'driving-car',
+                           "Driving (heavy goods vehicle)":'driving-hgv',
+                           "Walking":'foot-walking',
+                           "Cycling (regular)":'cycling-regular',
+                           "Cycling (road)":"cycling-road",
+                           "Cycling (mountain)":'cycling-mountain',
+                           "Cycling (electric)":'cycling-electric',
+                           "Hiking":'foot-hiking',
+                           "Wheelchair":'wheelchair'
+    }
     coordinates = [[location.longitude, location.latitude]]
     params = {
         'locations': coordinates,
         'range': [drive_time * 60],  # Convert minutes to seconds
-        'range_type': 'time'
+        'range_type': 'time',
+        'profile': travel_profile_dict[travel_profile]
     }
     response_iso = client.isochrones(**params)
     response_poly = shape(response_iso['features'][0]['geometry'])
@@ -159,7 +184,7 @@ def geocode_address(address):
     geopy.location.Location or None
         The location object for the address or None if geocoding fails.
     """
-    geolocator = Nominatim(user_agent="streamlit_catchment_app")
+    geolocator = Nominatim(user_agent="catchment_area_explorer")
     try:
         return geolocator.geocode(address)
     except:

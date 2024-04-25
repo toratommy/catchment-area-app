@@ -52,7 +52,7 @@ def main():
         st.caption("""Like this app? Check out what else we're up to at www.torainsights.ai""")
         st.divider()
         st.subheader('Get started: define your catchment area')
-        address, radius_type, radius = make_catchment_area_selections()
+        address, radius_type, travel_profile, radius = make_catchment_area_selections()
         generate_catchment = st.button("Generate Catchment Area")
         st.divider()
 
@@ -70,8 +70,8 @@ def main():
                         # Convert miles to meters for folium
                         radius_meters = radius * 1609.34
                         st.session_state.user_poly, st.session_state.bounds = draw_circle(catchment_map, location, radius_meters)
-                    elif radius_type == "Drive Time (minutes)":
-                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, ors_client)
+                    elif radius_type == "Travel time (minutes)":
+                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, travel_profile, ors_client)
                 catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
                 
                 location_caption = 'Location: '+address
