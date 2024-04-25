@@ -13,7 +13,29 @@ from scipy import *
 import plotly.figure_factory as ff
 import osmnx as ox
 from folium.plugins import HeatMap
+from folium.raster_layers import WmsTileLayer
+from folium.raster_layers import TileLayer
 from shapely.geometry import mapping
+
+def map_tile_layer_selections():
+    tile_layer_dict = {"OpenStreetMap":"OpenStreetMap",
+                       "CartoDB Positron":"CartoDB Positron", 
+                       "CartoDB Voyager":"CartoDB Voyager", 
+                       "CartoDB Dark Matter":"CartoDB Dark Matter", 
+                       "ESRI Imagery":WmsTileLayer(url='http://services.arcgisonline.com/arcgis/rest/services/World_Imagery'+ '/MapServer/tile/{z}/{y}/{x}',
+                                                   layers=None,
+                                                   name='ESRI Imagery',
+                                                   attr='ESRI World Imagery')
+    }
+    tile_layer_input = st.selectbox("Select Map Layer", 
+                                    list(tile_layer_dict.keys()), 
+                                    index=0)
+    tile_layer_value = tile_layer_dict[tile_layer_input]
+    if tile_layer_input == tile_layer_value:
+        tile_layer_type = 'Base'
+    else:
+        tile_layer_type = 'WMS'
+    return tile_layer_value, tile_layer_type
 
 @st.experimental_fragment
 def make_catchment_area_selections():
@@ -42,7 +64,7 @@ def make_catchment_area_selections():
                              min_value=1, 
                              max_value=max_radius, 
                              value=10,
-                             help="The max supported travel time radius is 60 minutes. Please set radius type to `Distance (miles)` if you with to generate a larger area.")
+                             help="The max supported travel time radius is 60 minutes. Please set radius type to `Distance (miles)` if you wish to generate a larger area.")
     return address, radius_type, travel_profile, radius
 
 @st.experimental_fragment
@@ -184,7 +206,7 @@ def geocode_address(address):
     geopy.location.Location or None
         The location object for the address or None if geocoding fails.
     """
-    geolocator = Nominatim(user_agent="catchment_area_explorer")
+    geolocator = Nominatim(user_agent="catchment_area_explorer_v2")
     try:
         return geolocator.geocode(address)
     except:

@@ -13,12 +13,13 @@ import pickle
 from folium.plugins import Fullscreen
 
 # TO DO: 
-#1. full screen option for map
-#2. add bar chart to POI page
-#3. add option for walking, cycling, HVG
-#4. add census data profiles
-#5. scale down for small cathcmnet areas; use to total pop returned value in ORS. also update map to include only in catchment
-#6. add real estate data
+# add option for map base layer
+# add bar chart to POI page
+# add pop density to POI page
+# add distance to nearest on POI page
+# add census data profiles
+# scale down for small cathcmnet areas; use to total pop returned value in ORS. also update map to include only in catchment
+# add real estate data
 
 # Load configuration variables
 with open('config.yml', 'r') as file:
@@ -58,10 +59,17 @@ def main():
 
     with tab1:
         st.subheader('Catchment area charateristics')
+        tile_layer_value, tile_layer_type  = map_tile_layer_selections()
+        
         # geocode location and generate catchment area
         location = geocode_address(address)
         if location:
-            catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
+            # set tile layer and initialize map
+            if tile_layer_type == 'WMS':
+                catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
+                tile_layer_value.add_to(catchment_map)
+            else:
+                catchment_map = folium.Map(location=[location.latitude, location.longitude], tiles=tile_layer_value, zoom_start=13)
             # add full screen to map
             Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(catchment_map)
             if generate_catchment:
