@@ -16,6 +16,19 @@ from folium.plugins import HeatMap
 from folium.raster_layers import WmsTileLayer
 from folium.raster_layers import TileLayer
 from shapely.geometry import mapping
+from folium.plugins import Fullscreen
+
+def update_map_layer(session_state):
+    # Update the tile layer based on user selection without resetting the existing overlays
+    if session_state.tile_layer_type == 'WMS':
+        session_state.tile_layer_value.add_to(session_state.catchment_map)
+        if "bounds" in session_state:
+            session_state.catchment_map.fit_bounds(st.session_state.bounds)
+    else:
+        session_state.catchment_map = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
+        if "bounds" in session_state:
+            session_state.catchment_map.fit_bounds(st.session_state.bounds)
+
 
 def map_tile_layer_selections():
     tile_layer_dict = {"OpenStreetMap":"OpenStreetMap",
@@ -181,7 +194,8 @@ def draw_drive_time_area(catchment_map, location, drive_time, travel_profile, cl
         'locations': coordinates,
         'range': [drive_time * 60],  # Convert minutes to seconds
         'range_type': 'time',
-        'profile': travel_profile_dict[travel_profile]
+        'profile': travel_profile_dict[travel_profile],
+        'attributes':['area','total_pop']
     }
     response_iso = client.isochrones(**params)
     response_poly = shape(response_iso['features'][0]['geometry'])
@@ -190,7 +204,8 @@ def draw_drive_time_area(catchment_map, location, drive_time, travel_profile, cl
 
     bounds = polygon.get_bounds()
     catchment_map.fit_bounds(bounds)
-    return response_poly, bounds
+    iso_properties = response_iso['features'][0]['properties']
+    return response_poly, bounds, iso_properties
 
 def geocode_address(address):
     """
@@ -388,16 +403,14 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
 
     return all_census_data
 
-def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
+def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
     """
     Plots census data on a map, coloring tracts by a specified census variable.
     
     Parameters
     ----------
-    catchment_map : folium.Map
-        The map on which to plot the census data.
-    bounds : tuple
-        The bounds to fit the map around the plotted data.
+    session_state : st.session_state
+        The current session state data.
     overlapping_tracts_gdf : geopandas.GeoDataFrame
         The GeoDataFrame containing the geometries of the tracts.
     census_data : pandas.DataFrame
@@ -413,12 +426,20 @@ def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, censu
     -------
     None
     """
-    # Merge the census data with the tract geometries
-    merged_data = overlapping_tracts_gdf.merge(census_data, left_on='GEOID', right_on='GEOID')
+    # Initialize Census Map using user-selected map layer
+    map_center = [session_state.user_poly.centroid.y, session_state.user_poly.centroid.x]
+    m = folium.Map(location=map_center, tiles=None)
+    # Handle both regular and WMS tile layers
+    if session_state.tile_layer_type == 'WMS':
+        session_state.tile_layer_value.add_to(m)
+    else:
+        m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
 
-    # Convert to GeoJSON
+    Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
+    # Existing code for merging data and adding GeoJson layer
+    merged_data = overlapping_tracts_gdf.merge(census_data, left_on='GEOID', right_on='GEOID')
     geojson_data = merged_data.to_json()
-    
+
     if normalization == 'Yes':
         plot_var = 'population_normalized'
         alias = var_name+' (Population Normalized):'
@@ -427,8 +448,7 @@ def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, censu
         plot_var = census_variable
         alias = var_name+':'
         deciles = merged_data[census_variable].quantile([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]).to_list()
-    
-    # Add the GeoJSON layer to the map
+
     folium.GeoJson(
         geojson_data,
         style_function=lambda feature: {
@@ -440,8 +460,10 @@ def plot_census_data_on_map(catchment_map, bounds, overlapping_tracts_gdf, censu
         tooltip=folium.GeoJsonTooltip(fields=[plot_var],
                                       aliases=[alias],
                                       localize=True)
-    ).add_to(catchment_map)
-    catchment_map.fit_bounds(bounds)
+    ).add_to(m)
+    m.fit_bounds(session_state.bounds)
+    return m
+
     
 def get_color(value, deciles):
     """
@@ -561,7 +583,7 @@ def fetch_poi_within_catchment(catchment_polygon, category):
         print(f"An error occurred while fetching POIs: {e}")
         return gpd.GeoDataFrame()  
     
-def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
+def plot_poi_data_on_map(pois_gdf, session_state, map_type):
     """
     Plots POI data on a map, either as markers or a heatmap, based on the specified map type.
     
@@ -579,31 +601,31 @@ def plot_poi_data_on_map(pois_gdf, catchment_polygon, map_type):
     folium.Map
         The map with POI data plotted.
     """
-    # Create a map centered around the catchment area
-    map_center = [catchment_polygon.centroid.y, catchment_polygon.centroid.x]
-    m = folium.Map(location=map_center, zoom_start=13)
-    
-    # Add the catchment area boundary to the map
-    folium.GeoJson(mapping(catchment_polygon), style_function=lambda x: {'color': 'black', 'fill':False}).add_to(m)
-    for _, poi in pois_gdf.iterrows():
-        # Construct address string
-        address_parts = [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]
-        address = ', '.join(filter(None, address_parts))
-        tooltip = f"{poi.get('name', 'Unnamed')} - {address}"
-        
-        poi_location = poi.geometry.centroid.coords[0]
+    # Create a map centered around the catchment area using the user-selected map layer
+    map_center = [session_state.user_poly.centroid.y, session_state.user_poly.centroid.x]
+    m = folium.Map(location=map_center, tiles=None, zoom_start=13)
+    if session_state.tile_layer_type == 'WMS':
+        session_state.tile_layer_value.add_to(m)
+    else:
+        m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
 
-        # Plot based on map_type
+    Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
+    folium.GeoJson(mapping(session_state.user_poly), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
+    
+    if map_type == 'Heatmap (POI density)':
+        heatmap_points = []
+    
+    for _, poi in pois_gdf.iterrows():
+        poi_location = poi.geometry.centroid.coords[0]
         if map_type == 'POI markers':
-            folium.Marker(location=[poi_location[1], poi_location[0]], popup=tooltip).add_to(m)
+            folium.Marker(location=[poi_location[1], 
+                                    poi_location[0]], 
+                                    popup=f"{poi.get('name', 'Unnamed')} - {', '.join(filter(None, [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]))}").add_to(m)
         elif map_type == 'Heatmap (POI density)':
-            if 'heatmap_points' not in locals():
-                heatmap_points = []
             heatmap_points.append([poi_location[1], poi_location[0]])
 
-        # Add heatmap layer if specified
-        if map_type == 'Heatmap (POI density)':
-            HeatMap(heatmap_points).add_to(m)
+    if map_type == 'Heatmap (POI density)':
+        HeatMap(heatmap_points).add_to(m)
 
     return m
 
@@ -628,4 +650,3 @@ def display_poi_counts(pois_gdf):
             #st.dataframe(pois_gdf[['amenity','name','addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']])
     else:
         st.write("No POI data available.")
-
