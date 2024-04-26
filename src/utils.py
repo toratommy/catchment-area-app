@@ -140,7 +140,7 @@ def draw_circle(catchment_map, location, radius):
     
     # Create circle buffer around the point and transform back to WGS84
     circle_poly = transform(az_ea_proj, point.buffer(radius))  # buffer in projected crs units (meters)
-    circle = folium.GeoJson(circle_poly, style_function=lambda x:{'fillColor': 'black', 'color': 'black'})
+    circle = folium.GeoJson(circle_poly, style_function=lambda x:{'fillColor': 'blue', 'color': 'blue'})
     circle.add_to(catchment_map)
     bounds = circle.get_bounds()
     catchment_map.fit_bounds(bounds)
@@ -185,7 +185,7 @@ def draw_drive_time_area(catchment_map, location, drive_time, travel_profile, cl
     }
     response_iso = client.isochrones(**params)
     response_poly = shape(response_iso['features'][0]['geometry'])
-    polygon = folium.GeoJson(response_iso, style_function=lambda x:{'fillColor': 'black', 'color': 'black'})
+    polygon = folium.GeoJson(response_iso, style_function=lambda x:{'fillColor': 'blue', 'color': 'blue'})
     polygon.add_to(catchment_map)
 
     bounds = polygon.get_bounds()
@@ -206,7 +206,7 @@ def geocode_address(address):
     geopy.location.Location or None
         The location object for the address or None if geocoding fails.
     """
-    geolocator = Nominatim(user_agent="catchment_area_explorer_v2")
+    geolocator = Nominatim(user_agent="catchment_area_explorer")
     try:
         return geolocator.geocode(address)
     except:
