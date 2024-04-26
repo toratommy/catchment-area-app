@@ -44,43 +44,57 @@ def main():
         st.divider()
 
     with tab1:
-        st.subheader('Catchment area charateristics')
-        tile_layer_value, tile_layer_type  = map_tile_layer_selections()
+        st.subheader('Catchment area characteristics')
+        st.session_state.tile_layer_value, st.session_state.tile_layer_type = map_tile_layer_selections()
+
+        # Initialize 'location' in session state if not already present
+        st.session_state.location = geocode_address(address)
         
-        # geocode location and generate catchment area
-        location = geocode_address(address)
-        if location:
-            # set tile layer and initialize map
-            if tile_layer_type == 'WMS':
-                catchment_map = folium.Map(location=[location.latitude, location.longitude], zoom_start=13)
-                tile_layer_value.add_to(catchment_map)
-            else:
-                catchment_map = folium.Map(location=[location.latitude, location.longitude], tiles=tile_layer_value, zoom_start=13)
-            # add full screen to map
-            Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(catchment_map)
+        # Initialize the map only if 'location' is successfully geocoded
+        if st.session_state.location:
+            if 'catchment_map' not in st.session_state or generate_catchment:
+                # Initialize map centered on the geocoded location
+                st.session_state.catchment_map = folium.Map(location=[st.session_state.location.latitude, st.session_state.location.longitude], zoom_start=13)
+            update_map_layer(st.session_state)
+            # Fullscreen plugin for map expansion
+            Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(st.session_state.catchment_map)
+
+            # Generate or re-display the catchment area
             if generate_catchment:
                 with st.spinner('Generating catchment area...'):
                     if radius_type == "Distance (miles)":
-                        # Convert miles to meters for folium
                         radius_meters = radius * 1609.34
-                        st.session_state.user_poly, st.session_state.bounds = draw_circle(catchment_map, location, radius_meters)
+                        st.session_state.user_poly, st.session_state.bounds = draw_circle(st.session_state.catchment_map, st.session_state.location, radius_meters)
                     elif radius_type == "Travel time (minutes)":
-                        st.session_state.user_poly, st.session_state.bounds = draw_drive_time_area(catchment_map, location, radius, travel_profile, ors_client)
+                        st.session_state.user_poly, st.session_state.bounds, st.session_state.iso_properties = draw_drive_time_area(st.session_state.catchment_map, st.session_state.location, radius, travel_profile, ors_client)
+            if "user_poly" in st.session_state:
                 catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
-                
                 location_caption = 'Location: '+address
                 if radius_type == 'Distance (miles)':
                     radius_caption = 'Catchment radius: '+str(radius)+' miles'
                 else: 
-                    radius_caption = 'Catchment radius: '+str(radius)+' minute drive'
-                catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
-                map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
-                st.caption(map_caption)
-            else: 
+                    radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
+                    total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.iso_properties['total_pop']))
+                catchment_size_caption = "Catchment size: "+'{:,}'.format(catchment_size)+" square miles"
+                map_caption1 = location_caption + ' | ' + radius_caption 
+                if "iso_properties" in st.session_state and radius_type == 'Travel time (minutes)':
+                    map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
+                else: 
+                    map_caption2 = catchment_size_caption 
+                st.caption(map_caption1)
+                st.caption(map_caption2)
+            else:
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
-            folium_static(catchment_map)
+
+            # Display existing catchment area on map if available
+            if 'user_poly' in st.session_state:
+                folium.GeoJson(st.session_state.user_poly, style_function=lambda x: {'fillColor': 'blue', 'color': 'blue'}).add_to(st.session_state.catchment_map)
+            
+            folium_static(st.session_state.catchment_map)
         else:
-            st.error("Could not geocode the address. Please try another address.")
+            st.error("Could not geocode the address. Please try another address or check the geocoding service.")
+
+
 
     with tab2:
         st.subheader('Overlay demographic data within your catchment')
@@ -96,7 +110,7 @@ def main():
             if radius_type == 'Distance (miles)':
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
             else: 
-                radius_caption = 'Catchment radius: '+str(radius)+' minute drive'
+                radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
             catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
             map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
             st.caption(map_caption)
@@ -120,23 +134,26 @@ def main():
                     # Fetch census data for overlapping tracts
                     census_data = fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization)
 
-                    plot_census_data_on_map(catchment_map, st.session_state.bounds, overlapping_tracts, census_data, variables[0], var_name, normalization)
+                    st.session_state.census_map = plot_census_data_on_map(st.session_state, overlapping_tracts, census_data, variables[0], var_name, normalization)
 
                     # Generate distribution plot
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
                     
                     total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
-                    st.caption('Total population (across entire catchment): '+f'{int(total_population):,}')
+                    if st.session_state.iso_properties and radius_type == 'Travel time (minutes)':
+                        st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.iso_properties['total_pop'])))
+                    else:
+                        st.caption('Total population (across entire catchment): '+'{:,}'.format(int(total_population)))
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
-                    folium_static(catchment_map)
+                    folium_static(st.session_state.census_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
                     st.plotly_chart(fig, use_container_width=True)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
-            folium_static(catchment_map)
+            folium_static(st.session_state.catchment_map)
         
     with tab3:
         st.subheader('Overlay POI data within your catchment')
@@ -146,13 +163,14 @@ def main():
         poi_categories, poi_map_type = make_poi_selections(amenity_list)
         plot_poi_data = st.button("Plot POI data")
         st.divider()
+        
         if "user_poly" in st.session_state:
             catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
             location_caption = 'Location: '+address
             if radius_type == 'Distance (miles)':
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
             else: 
-                radius_caption = 'Catchment radius: '+str(radius)+' minute drive'
+                radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
             catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
             map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
             st.caption(map_caption)
@@ -165,15 +183,13 @@ def main():
                     time.sleep(5)
                     pois_gdf = fetch_poi_within_catchment(st.session_state.user_poly, poi_categories)
                 display_poi_counts(pois_gdf)
-                catchment_map = plot_poi_data_on_map(pois_gdf, st.session_state.user_poly, poi_map_type)
-                catchment_map.fit_bounds(st.session_state.bounds)
-                folium_static(catchment_map)
+                st.session_state.poi_map = plot_poi_data_on_map(pois_gdf, st.session_state, poi_map_type)
+                st.session_state.poi_map.fit_bounds(st.session_state.bounds)
+                folium_static(st.session_state.poi_map)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
-            if "bounds" in st.session_state:
-                catchment_map.fit_bounds(st.session_state.bounds)
-            folium_static(catchment_map)
+            folium_static(st.session_state.catchment_map)
 
     with tab4:
         st.subheader('Overview')
