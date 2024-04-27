@@ -175,7 +175,7 @@ def main():
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching POI data to plot...'):
                     time.sleep(5)
-                    st.session_state.catchment_area.poi_enrichchment(poi_categories)
+                    st.session_state.catchment_area.poi_enrichment(poi_categories)
                 display_poi_counts(st.session_state.catchment_area.poi_data)
                 st.session_state.poi_map = plot_poi_data_on_map(st.session_state, poi_map_type)
                 folium_static(st.session_state.poi_map)
