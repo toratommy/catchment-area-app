@@ -1,9 +1,10 @@
 # catchment_area.py
+import geopandas as gpd
 from shapely.geometry import shape, Point
 from shapely.ops import transform
 from functools import partial
 import pyproj
-#from utils import load_state_boundaries, find_intersecting_states, calculate_overlapping_tracts, fetch_census_data_for_tracts, fetch_poi_within_catchment
+from src.utils import load_state_boundaries, find_intersecting_states, calculate_overlapping_tracts, fetch_census_data_for_tracts, fetch_poi_within_catchment
 
 class CatchmentArea:
     def __init__(self, location, radius_type, radius, travel_profile=None, ors_client=None):
@@ -14,6 +15,9 @@ class CatchmentArea:
         self.ors_client = ors_client
         self.geometry = None
         self.properties = None
+        self.census_data = None
+        self.census_tracts = None
+        self.poi_data = None
 
     def geocode_address(self, address):
         try:
@@ -64,3 +68,26 @@ class CatchmentArea:
         self.geometry = shape(response_iso['features'][0]['geometry'])
         self.iso_properties = response_iso['features'][0]['properties']
         return self.geometry
+    
+    def demographic_enrichment(self, census_api, acs_variables, acs_year, normalization):
+        if not self.geometry:
+            raise ValueError("Catchment area not defined.")
+        states_gdf = load_state_boundaries(acs_year)
+        catchment_gdf = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[self.geometry])
+        intersecting_states = find_intersecting_states(catchment_gdf, states_gdf)
+        overlapping_tracts = calculate_overlapping_tracts(catchment_gdf, intersecting_states, acs_year)
+
+        # Fetch census data
+        census_data = fetch_census_data_for_tracts(census_api, acs_year, acs_variables, overlapping_tracts, normalization)
+        self.census_data = census_data
+        self.census_tracts = overlapping_tracts
+        return census_data, overlapping_tracts
+    
+    def poi_enrichment(self, categories):
+        if not self.geometry:
+            raise ValueError("Catchment area not defined.")
+        poi_data = {}
+        for category in categories:
+            poi_data[category] = fetch_poi_within_catchment(self.geometry, category)
+        self.poi_data = poi_data
+        return poi_data

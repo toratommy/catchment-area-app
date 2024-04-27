@@ -11,11 +11,11 @@ from src.utils import *
 import yaml
 import pickle
 from folium.plugins import Fullscreen
-from catchment_area import CatchmentArea
+from src.catchment_area import CatchmentArea
 
 # TO DO:
-# refactor to be object oriented
-# scale down for small cathcmnet areas; use to total pop returned value in ORS. also update map to include only in catchment
+# make area and total_pop catchment area attributes (for both radii type); remoive iso_properties
+# update map to include only in catchment; for boardering census tracts, take intersection and use overlap % to estimate variable values
 # add bar chart to POI page
 # add pop density to POI page
 # add distance to nearest on POI page
@@ -30,6 +30,8 @@ with open('config.yml', 'r') as file:
 ors_client = client.Client(key=config_vars['openroute_api_key'])
 census_year = config_vars['census_year']
 census_api_key =  config_vars['census_api_key']
+census_api = Census(census_api_key) 
+acs_api_url = "https://api.census.gov/data/{0}/acs/acs5".format(census_year)
 
 def main():
     # set theme
@@ -77,13 +79,12 @@ def main():
             # Generate catchment area
             if generate_catchment:
                 with st.spinner('Generating catchment area...'):
-                    catchment_area = CatchmentArea(st.session_state.location, 
-                                                   radius_type, 
-                                                   radius,   
-                                                   travel_profile,
-                                                   ors_client)
-                    catchment_area.generate_geometry()
-                    st.session_state.catchment_area = catchment_area
+                    st.session_state.catchment_area = CatchmentArea(st.session_state.location, 
+                                                                    radius_type, 
+                                                                    radius,   
+                                                                    travel_profile,
+                                                                    ors_client)
+                    st.session_state.catchment_area.generate_geometry()
                     plot_catchment_area(st.session_state)
 
             if "catchment_area" in st.session_state:
@@ -115,8 +116,7 @@ def main():
 
     with tab2:
         st.subheader('Overlay demographic data within your catchment')
-        api_url = "https://api.census.gov/data/{0}/acs/acs5".format(census_year)
-        variables_df = fetch_census_variables(api_url)
+        variables_df = fetch_census_variables(acs_api_url)
         filters_dict = variables_df.groupby('Variable Group')['Variable Name'].apply(list).to_dict()
         var_group, var_name, normalization = make_census_variable_selections(filters_dict)
         plot_census_data = st.button("Plot Demographic Data")
@@ -137,32 +137,23 @@ def main():
         if plot_census_data:
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching demographic data to plot...'):
-                    variables = variables_df[(variables_df['Variable Name']==var_name) & (variables_df['Variable Group']==var_group)]['variable'].to_list()
-                    census_api = Census(census_api_key) 
-
-                    # Load state boundaries and identify intersecting states
-                    user_gdf = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[st.session_state.catchment_area.geometry])
-                    states_gdf = load_state_boundaries(census_year)
-                    intersecting_state_codes = find_intersecting_states(user_gdf, states_gdf)
-
-                    # Calculate overlapping tracts for intersecting states
-                    overlapping_tracts = calculate_overlapping_tracts(user_gdf, intersecting_state_codes, census_year)
-
+                    acs_variables = variables_df[(variables_df['Variable Name']==var_name) & (variables_df['Variable Group']==var_group)]['variable'].to_list()
+                    
                     # Fetch census data for overlapping tracts
-                    census_data = fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization)
+                    st.session_state.catchment_area.demographic_enrichment(census_api, acs_variables, census_year, normalization)
 
-                    st.session_state.census_map = plot_census_data_on_map(st.session_state, overlapping_tracts, census_data, variables[0], var_name, normalization)
+                    st.session_state.census_map = plot_census_data_on_map(st.session_state, acs_variables[0], var_name, normalization)
 
                     # Generate distribution plot
-                    fig = create_distribution_plot(census_data, variables, var_name, normalization)
+                    fig = create_distribution_plot(st.session_state.catchment_area.census_data, acs_variables, var_name, normalization)
                     
-                    total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
+                    total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], st.session_state.catchment_area.census_tracts, 'No')['B01003_001E'].sum()
                     if "catchment_area" in st.session_state and radius_type == 'Travel time (minutes)':
                         st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop'])))
                     else:
                         st.caption('Total population (across entire catchment): '+'{:,}'.format(int(total_population)))
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
-                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(census_data[variables[0]])):,}')
+                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(st.session_state.catchment_area.census_data[acs_variables[0]])):,}')
                     folium_static(st.session_state.census_map)
                     st.divider()
                     st.subheader("Distribution plot of selected census variable across your catchment area")
@@ -198,10 +189,9 @@ def main():
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching POI data to plot...'):
                     time.sleep(5)
-                    pois_gdf = fetch_poi_within_catchment(st.session_state.catchment_area.geometry, poi_categories)
-                display_poi_counts(pois_gdf)
-                st.session_state.poi_map = plot_poi_data_on_map(pois_gdf, st.session_state, poi_map_type)
-                st.session_state.poi_map.fit_bounds(st.session_state.bounds)
+                    st.session_state.catchment_area.poi_enchirchment(poi_categories)
+                display_poi_counts(st.session_state.catchment_area.poi_data)
+                st.session_state.poi_map = plot_poi_data_on_map(st.session_state, poi_map_type)
                 folium_static(st.session_state.poi_map)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')

@@ -337,7 +337,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
 
     return all_census_data
 
-def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
+def plot_census_data_on_map(session_state, census_variable, var_name, normalization):
     """
     Plots census data on a map, coloring tracts by a specified census variable.
     
@@ -345,10 +345,6 @@ def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, 
     ----------
     session_state : st.session_state
         The current session state data.
-    overlapping_tracts_gdf : geopandas.GeoDataFrame
-        The GeoDataFrame containing the geometries of the tracts.
-    census_data : pandas.DataFrame
-        The DataFrame containing the census data for the tracts.
     census_variable : str
         The census variable to color the tracts by.
     var_name : str
@@ -371,7 +367,7 @@ def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, 
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
     # Existing code for merging data and adding GeoJson layer
-    merged_data = overlapping_tracts_gdf.merge(census_data, left_on='GEOID', right_on='GEOID')
+    merged_data = session_state.catchment_area.census_tracts.merge(session_state.catchment_area.census_data, left_on='GEOID', right_on='GEOID')
     geojson_data = merged_data.to_json()
 
     if normalization == 'Yes':
@@ -517,16 +513,14 @@ def fetch_poi_within_catchment(catchment_polygon, category):
         print(f"An error occurred while fetching POIs: {e}")
         return gpd.GeoDataFrame()  
     
-def plot_poi_data_on_map(pois_gdf, session_state, map_type):
+def plot_poi_data_on_map(session_state, map_type):
     """
     Plots POI data on a map, either as markers or a heatmap, based on the specified map type.
     
     Parameters
     ----------
-    pois_gdf : geopandas.GeoDataFrame
-        The GeoDataFrame containing POI data.
-    catchment_polygon : shapely.geometry.Polygon
-        The polygon defining the catchment area.
+    session_state : st.session_state
+        The current session state object.
     map_type : str
         The type of map to plot ('POI markers' or 'Heatmap (POI density)').
     
@@ -549,7 +543,7 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
     if map_type == 'Heatmap (POI density)':
         heatmap_points = []
     
-    for _, poi in pois_gdf.iterrows():
+    for _, poi in session_state.catchment_area.poi_data.iterrows():
         poi_location = poi.geometry.centroid.coords[0]
         if map_type == 'POI markers':
             folium.Marker(location=[poi_location[1], 
@@ -560,7 +554,7 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
 
     if map_type == 'Heatmap (POI density)':
         HeatMap(heatmap_points).add_to(m)
-
+    m.fit_bounds(session_state.bounds)
     return m
 
 def display_poi_counts(pois_gdf):
