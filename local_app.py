@@ -96,7 +96,7 @@ def main():
                     total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop']))
                 catchment_size_caption = "Catchment size: "+'{:,}'.format(catchment_size)+" square miles"
                 map_caption1 = location_caption + ' | ' + radius_caption 
-                if "catchment_area.iso_properties" in st.session_state and radius_type == 'Travel time (minutes)':
+                if "catchment_area" in st.session_state and radius_type == 'Travel time (minutes)':
                     map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
                 else: 
                     map_caption2 = catchment_size_caption 
@@ -157,7 +157,7 @@ def main():
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
                     
                     total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
-                    if st.session_state.catchment_area.iso_properties and radius_type == 'Travel time (minutes)':
+                    if "catchment_area" in st.session_state and radius_type == 'Travel time (minutes)':
                         st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop'])))
                     else:
                         st.caption('Total population (across entire catchment): '+'{:,}'.format(int(total_population)))

@@ -146,14 +146,8 @@ def plot_catchment_area(session_state):
     
     Parameters
     ----------
-    catchment_map : folium.Map
-        The map on which to plot the drive time area.
-    location : geopy.location.Location
-        The central point from which to calculate drive time area.
-    drive_time : int
-        The drive time in minutes.
-    client : openrouteservice.Client
-        The client to use for OpenRouteService API requests.
+    session_state : session_state
+        The current session state object.
     
     Returns
     -------
@@ -164,8 +158,8 @@ def plot_catchment_area(session_state):
     polygon = folium.GeoJson(session_state.catchment_area.geometry, style_function=lambda x:{'fillColor': 'blue', 'color': 'blue'})
     polygon.add_to(st.session_state.catchment_map)
 
-    bounds = polygon.get_bounds()
-    st.session_state.catchment_map.fit_bounds(bounds)
+    st.session_state.bounds = polygon.get_bounds()
+    st.session_state.catchment_map.fit_bounds(st.session_state.bounds)
 
 @st.cache_data    
 def fetch_census_variables(api_url):
@@ -367,7 +361,7 @@ def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, 
     None
     """
     # Initialize Census Map using user-selected map layer
-    map_center = [session_state.catchment_area.centroid.y, session_state.catchment_area.centroid.x]
+    map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
     m = folium.Map(location=map_center, tiles=None)
     # Handle both regular and WMS tile layers
     if session_state.tile_layer_type == 'WMS':
@@ -542,7 +536,7 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
         The map with POI data plotted.
     """
     # Create a map centered around the catchment area using the user-selected map layer
-    map_center = [session_state.catchment_area.centroid.y, session_state.catchment_area.centroid.x]
+    map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
     m = folium.Map(location=map_center, tiles=None, zoom_start=13)
     if session_state.tile_layer_type == 'WMS':
         session_state.tile_layer_value.add_to(m)
@@ -550,7 +544,7 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
         m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
-    folium.GeoJson(mapping(session_state.catchment_area), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
+    folium.GeoJson(mapping(session_state.catchment_area.geometry), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
     
     if map_type == 'Heatmap (POI density)':
         heatmap_points = []
