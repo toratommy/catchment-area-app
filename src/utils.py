@@ -120,93 +120,6 @@ def make_poi_selections(amenity_list):
     poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
     return poi_categories, poi_map_type
 
-def draw_circle(catchment_map, location, radius):
-    """
-    Draws a circle on a map at a specified location and radius.
-    
-    Parameters
-    ----------
-    catchment_map : folium.Map
-        The map on which to draw the circle.
-    location : geopy.location.Location
-        The central point of the circle.
-    radius : float
-        The radius of the circle in meters.
-    
-    Returns
-    -------
-    tuple
-        A tuple containing the circle polygon and its bounding box.
-    """ 
-    # Create a point from the location
-    point = Point(location.longitude, location.latitude)
-        
-    # Create circle buffer around the point and transform back to WGS84
-    circle_poly = point.buffer(radius)  # buffer in projected crs units (meters)
-    
-    # Use a Lambert Azimuthal Equal Area projection to approximate the circle on the Earth's surface
-    az_ea_proj = partial(
-        pyproj.transform,
-        pyproj.Proj(f'+proj=aeqd +lat_0={location.latitude} +lon_0={location.longitude} +x_0=0 +y_0=0'),
-        pyproj.Proj('+proj=longlat +datum=WGS84')
-    )
-    
-    # Create circle buffer around the point and transform back to WGS84
-    circle_poly = transform(az_ea_proj, point.buffer(radius))  # buffer in projected crs units (meters)
-    circle = folium.GeoJson(circle_poly, style_function=lambda x:{'fillColor': 'blue', 'color': 'blue'})
-    circle.add_to(catchment_map)
-    bounds = circle.get_bounds()
-    catchment_map.fit_bounds(bounds)
-    return circle_poly, bounds
-
-def draw_drive_time_area(catchment_map, location, drive_time, travel_profile, client):
-    """
-    Draws an area based on drive time from a specified location.
-    
-    Parameters
-    ----------
-    catchment_map : folium.Map
-        The map on which to draw the drive time area.
-    location : geopy.location.Location
-        The central point from which to calculate drive time area.
-    drive_time : int
-        The drive time in minutes.
-    client : openrouteservice.Client
-        The client to use for OpenRouteService API requests.
-    
-    Returns
-    -------
-    shapely.geometry.Polygon
-        The polygon representing the drive time area.
-    """
-    travel_profile_dict = {"Driving (car)":'driving-car',
-                           "Driving (heavy goods vehicle)":'driving-hgv',
-                           "Walking":'foot-walking',
-                           "Cycling (regular)":'cycling-regular',
-                           "Cycling (road)":"cycling-road",
-                           "Cycling (mountain)":'cycling-mountain',
-                           "Cycling (electric)":'cycling-electric',
-                           "Hiking":'foot-hiking',
-                           "Wheelchair":'wheelchair'
-    }
-    coordinates = [[location.longitude, location.latitude]]
-    params = {
-        'locations': coordinates,
-        'range': [drive_time * 60],  # Convert minutes to seconds
-        'range_type': 'time',
-        'profile': travel_profile_dict[travel_profile],
-        'attributes':['area','total_pop']
-    }
-    response_iso = client.isochrones(**params)
-    response_poly = shape(response_iso['features'][0]['geometry'])
-    polygon = folium.GeoJson(response_iso, style_function=lambda x:{'fillColor': 'blue', 'color': 'blue'})
-    polygon.add_to(catchment_map)
-
-    bounds = polygon.get_bounds()
-    catchment_map.fit_bounds(bounds)
-    iso_properties = response_iso['features'][0]['properties']
-    return response_poly, bounds, iso_properties
-
 def geocode_address(address):
     """
     Geocodes an address to a latitude and longitude.
@@ -226,6 +139,27 @@ def geocode_address(address):
         return geolocator.geocode(address)
     except:
         return None
+
+def plot_catchment_area(session_state):
+    """
+    plots an area based on drive time from a specified location.
+    
+    Parameters
+    ----------
+    session_state : session_state
+        The current session state object.
+    
+    Returns
+    -------
+    shapely.geometry.Polygon
+        The polygon representing the drive time area.
+    """
+
+    polygon = folium.GeoJson(session_state.catchment_area.geometry, style_function=lambda x:{'fillColor': 'blue', 'color': 'blue'})
+    polygon.add_to(st.session_state.catchment_map)
+
+    st.session_state.bounds = polygon.get_bounds()
+    st.session_state.catchment_map.fit_bounds(st.session_state.bounds)
 
 @st.cache_data    
 def fetch_census_variables(api_url):
@@ -403,7 +337,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
 
     return all_census_data
 
-def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, census_variable, var_name, normalization):
+def plot_census_data_on_map(session_state, census_variable, var_name, normalization):
     """
     Plots census data on a map, coloring tracts by a specified census variable.
     
@@ -411,10 +345,6 @@ def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, 
     ----------
     session_state : st.session_state
         The current session state data.
-    overlapping_tracts_gdf : geopandas.GeoDataFrame
-        The GeoDataFrame containing the geometries of the tracts.
-    census_data : pandas.DataFrame
-        The DataFrame containing the census data for the tracts.
     census_variable : str
         The census variable to color the tracts by.
     var_name : str
@@ -427,7 +357,7 @@ def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, 
     None
     """
     # Initialize Census Map using user-selected map layer
-    map_center = [session_state.user_poly.centroid.y, session_state.user_poly.centroid.x]
+    map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
     m = folium.Map(location=map_center, tiles=None)
     # Handle both regular and WMS tile layers
     if session_state.tile_layer_type == 'WMS':
@@ -437,7 +367,7 @@ def plot_census_data_on_map(session_state, overlapping_tracts_gdf, census_data, 
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
     # Existing code for merging data and adding GeoJson layer
-    merged_data = overlapping_tracts_gdf.merge(census_data, left_on='GEOID', right_on='GEOID')
+    merged_data = session_state.catchment_area.census_tracts.merge(session_state.catchment_area.census_data, left_on='GEOID', right_on='GEOID')
     geojson_data = merged_data.to_json()
 
     if normalization == 'Yes':
@@ -491,13 +421,13 @@ def get_color(value, deciles):
             return colors[i]
     return colors[-1]  # Use the last color for values in the highest decile
 
-def calculate_area_sq_miles(user_poly):
+def calculate_area_sq_miles(catchment_area):
     """
     Calculates the area of a user-defined polygon in square miles.
 
     Parameters
     ----------
-    user_poly : shapely.geometry.Polygon
+    catchment_area : shapely.geometry.Polygon
         A polygon in latitude and longitude coordinates.
 
     Returns
@@ -507,8 +437,8 @@ def calculate_area_sq_miles(user_poly):
     """
     proj = partial(pyproj.transform,
                    pyproj.Proj(init='epsg:4326'),  # Source coordinate system (WGS84)
-                   pyproj.Proj(proj='aea', lat_1=user_poly.bounds[1], lat_2=user_poly.bounds[3]))  # Albers Equal Area projection
-    projected_polygon = transform(proj, user_poly) 
+                   pyproj.Proj(proj='aea', lat_1=catchment_area.bounds[1], lat_2=catchment_area.bounds[3]))  # Albers Equal Area projection
+    projected_polygon = transform(proj, catchment_area) 
      # Project the polygon to the new coordinate system
     area_sq_miles = round(projected_polygon.area / 2589988.11,2)  # Convert area from square meters to square miles
     return area_sq_miles
@@ -583,16 +513,14 @@ def fetch_poi_within_catchment(catchment_polygon, category):
         print(f"An error occurred while fetching POIs: {e}")
         return gpd.GeoDataFrame()  
     
-def plot_poi_data_on_map(pois_gdf, session_state, map_type):
+def plot_poi_data_on_map(session_state, map_type):
     """
     Plots POI data on a map, either as markers or a heatmap, based on the specified map type.
     
     Parameters
     ----------
-    pois_gdf : geopandas.GeoDataFrame
-        The GeoDataFrame containing POI data.
-    catchment_polygon : shapely.geometry.Polygon
-        The polygon defining the catchment area.
+    session_state : st.session_state
+        The current session state object.
     map_type : str
         The type of map to plot ('POI markers' or 'Heatmap (POI density)').
     
@@ -602,7 +530,7 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
         The map with POI data plotted.
     """
     # Create a map centered around the catchment area using the user-selected map layer
-    map_center = [session_state.user_poly.centroid.y, session_state.user_poly.centroid.x]
+    map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
     m = folium.Map(location=map_center, tiles=None, zoom_start=13)
     if session_state.tile_layer_type == 'WMS':
         session_state.tile_layer_value.add_to(m)
@@ -610,12 +538,12 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
         m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
-    folium.GeoJson(mapping(session_state.user_poly), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
+    folium.GeoJson(mapping(session_state.catchment_area.geometry), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
     
     if map_type == 'Heatmap (POI density)':
         heatmap_points = []
     
-    for _, poi in pois_gdf.iterrows():
+    for _, poi in session_state.catchment_area.poi_data.iterrows():
         poi_location = poi.geometry.centroid.coords[0]
         if map_type == 'POI markers':
             folium.Marker(location=[poi_location[1], 
@@ -626,7 +554,7 @@ def plot_poi_data_on_map(pois_gdf, session_state, map_type):
 
     if map_type == 'Heatmap (POI density)':
         HeatMap(heatmap_points).add_to(m)
-
+    m.fit_bounds(session_state.bounds)
     return m
 
 def display_poi_counts(pois_gdf):
