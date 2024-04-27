@@ -570,7 +570,6 @@ def display_poi_counts(pois_gdf):
     -------
     None
     """
-    # Assuming 'amenity' column stores the POI category
     if not pois_gdf.empty and 'amenity' in pois_gdf.columns:
         counts = pois_gdf['amenity'].value_counts()
         for category, count in counts.items():
