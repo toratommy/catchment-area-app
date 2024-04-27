@@ -86,8 +86,7 @@ class CatchmentArea:
     def poi_enrichment(self, categories):
         if not self.geometry:
             raise ValueError("Catchment area not defined.")
-        poi_data = {}
-        for category in categories:
-            poi_data[category] = fetch_poi_within_catchment(self.geometry, category)
+
+        poi_data = fetch_poi_within_catchment(self.geometry, categories)
         self.poi_data = poi_data
         return poi_data
