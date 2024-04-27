@@ -11,13 +11,15 @@ from src.utils import *
 import yaml
 import pickle
 from folium.plugins import Fullscreen
+from catchment_area import CatchmentArea
 
-# TO DO: 
+# TO DO:
+# refactor to be object oriented
+# scale down for small cathcmnet areas; use to total pop returned value in ORS. also update map to include only in catchment
 # add bar chart to POI page
 # add pop density to POI page
 # add distance to nearest on POI page
 # add census data profiles
-# scale down for small cathcmnet areas; use to total pop returned value in ORS. also update map to include only in catchment
 # add real estate data
 
 # Load configuration variables
@@ -72,25 +74,29 @@ def main():
             # Fullscreen plugin for map expansion
             Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(st.session_state.catchment_map)
 
-            # Generate or re-display the catchment area
+            # Generate catchment area
             if generate_catchment:
                 with st.spinner('Generating catchment area...'):
-                    if radius_type == "Distance (miles)":
-                        radius_meters = radius * 1609.34
-                        st.session_state.user_poly, st.session_state.bounds = draw_circle(st.session_state.catchment_map, st.session_state.location, radius_meters)
-                    elif radius_type == "Travel time (minutes)":
-                        st.session_state.user_poly, st.session_state.bounds, st.session_state.iso_properties = draw_drive_time_area(st.session_state.catchment_map, st.session_state.location, radius, travel_profile, ors_client)
-            if "user_poly" in st.session_state:
-                catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
+                    catchment_area = CatchmentArea(st.session_state.location, 
+                                                   radius_type, 
+                                                   radius,   
+                                                   travel_profile,
+                                                   ors_client)
+                    catchment_area.generate_geometry()
+                    st.session_state.catchment_area = catchment_area
+                    plot_catchment_area(st.session_state)
+
+            if "catchment_area" in st.session_state:
+                catchment_size = calculate_area_sq_miles(st.session_state.catchment_area.geometry)
                 location_caption = 'Location: '+address
                 if radius_type == 'Distance (miles)':
                     radius_caption = 'Catchment radius: '+str(radius)+' miles'
                 else: 
                     radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
-                    total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.iso_properties['total_pop']))
+                    total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop']))
                 catchment_size_caption = "Catchment size: "+'{:,}'.format(catchment_size)+" square miles"
                 map_caption1 = location_caption + ' | ' + radius_caption 
-                if "iso_properties" in st.session_state and radius_type == 'Travel time (minutes)':
+                if "catchment_area.iso_properties" in st.session_state and radius_type == 'Travel time (minutes)':
                     map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
                 else: 
                     map_caption2 = catchment_size_caption 
@@ -100,14 +106,12 @@ def main():
                 st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')
 
             # Display existing catchment area on map if available
-            if 'user_poly' in st.session_state:
-                folium.GeoJson(st.session_state.user_poly, style_function=lambda x: {'fillColor': 'blue', 'color': 'blue'}).add_to(st.session_state.catchment_map)
+            if 'catchment_area' in st.session_state:
+                folium.GeoJson(st.session_state.catchment_area.geometry, style_function=lambda x: {'fillColor': 'blue', 'color': 'blue'}).add_to(st.session_state.catchment_map)
             
             folium_static(st.session_state.catchment_map)
         else:
             st.error("Could not geocode the address. Please try another address or check the geocoding service.")
-
-
 
     with tab2:
         st.subheader('Overlay demographic data within your catchment')
@@ -117,8 +121,8 @@ def main():
         var_group, var_name, normalization = make_census_variable_selections(filters_dict)
         plot_census_data = st.button("Plot Demographic Data")
         st.divider()
-        if "user_poly" in st.session_state:
-            catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
+        if "catchment_area" in st.session_state:
+            catchment_size = calculate_area_sq_miles(st.session_state.catchment_area.geometry)
             location_caption = 'Location: '+address
             if radius_type == 'Distance (miles)':
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
@@ -131,13 +135,13 @@ def main():
             st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')  
         #fetch and plot census data
         if plot_census_data:
-            if "user_poly" in st.session_state:
+            if "catchment_area" in st.session_state:
                 with st.spinner('Fetching demographic data to plot...'):
                     variables = variables_df[(variables_df['Variable Name']==var_name) & (variables_df['Variable Group']==var_group)]['variable'].to_list()
                     census_api = Census(census_api_key) 
 
                     # Load state boundaries and identify intersecting states
-                    user_gdf = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[st.session_state.user_poly])
+                    user_gdf = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[st.session_state.catchment_area.geometry])
                     states_gdf = load_state_boundaries(census_year)
                     intersecting_state_codes = find_intersecting_states(user_gdf, states_gdf)
 
@@ -153,8 +157,8 @@ def main():
                     fig = create_distribution_plot(census_data, variables, var_name, normalization)
                     
                     total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], overlapping_tracts, 'No')['B01003_001E'].sum()
-                    if st.session_state.iso_properties and radius_type == 'Travel time (minutes)':
-                        st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.iso_properties['total_pop'])))
+                    if st.session_state.catchment_area.iso_properties and radius_type == 'Travel time (minutes)':
+                        st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop'])))
                     else:
                         st.caption('Total population (across entire catchment): '+'{:,}'.format(int(total_population)))
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
@@ -177,8 +181,8 @@ def main():
         plot_poi_data = st.button("Plot POI data")
         st.divider()
         
-        if "user_poly" in st.session_state:
-            catchment_size = calculate_area_sq_miles(st.session_state.user_poly)
+        if "catchment_area" in st.session_state:
+            catchment_size = calculate_area_sq_miles(st.session_state.catchment_area.geometry)
             location_caption = 'Location: '+address
             if radius_type == 'Distance (miles)':
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
@@ -191,10 +195,10 @@ def main():
             st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')  
         #fetch and plot poi data
         if plot_poi_data:
-            if "user_poly" in st.session_state:
+            if "catchment_area" in st.session_state:
                 with st.spinner('Fetching POI data to plot...'):
                     time.sleep(5)
-                    pois_gdf = fetch_poi_within_catchment(st.session_state.user_poly, poi_categories)
+                    pois_gdf = fetch_poi_within_catchment(st.session_state.catchment_area.geometry, poi_categories)
                 display_poi_counts(pois_gdf)
                 st.session_state.poi_map = plot_poi_data_on_map(pois_gdf, st.session_state, poi_map_type)
                 st.session_state.poi_map.fit_bounds(st.session_state.bounds)
