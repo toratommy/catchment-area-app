@@ -14,8 +14,6 @@ from folium.plugins import Fullscreen
 from src.catchment_area import CatchmentArea
 
 # TO DO:
-# make area and total_pop catchment area attributes (for both radii type); remoive iso_properties
-# update map to include only in catchment; for boardering census tracts, take intersection and use overlap % to estimate variable values
 # add bar chart to POI page
 # add pop density to POI page
 # add distance to nearest on POI page
@@ -88,19 +86,19 @@ def main():
                     plot_catchment_area(st.session_state)
 
             if "catchment_area" in st.session_state:
-                catchment_size = calculate_area_sq_miles(st.session_state.catchment_area.geometry)
+                # calculate catchment properties
+                st.session_state.catchment_area.calculate_area_sq_miles()
+                st.session_state.catchment_area.calculate_total_population(census_api, census_year)
+                # generate caption
                 location_caption = 'Location: '+address
                 if radius_type == 'Distance (miles)':
                     radius_caption = 'Catchment radius: '+str(radius)+' miles'
                 else: 
                     radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
-                    total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop']))
-                catchment_size_caption = "Catchment size: "+'{:,}'.format(catchment_size)+" square miles"
+                total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.catchment_area.total_population))
+                catchment_size_caption = "Catchment size: "+'{:,}'.format(st.session_state.catchment_area.area)+" square miles"
                 map_caption1 = location_caption + ' | ' + radius_caption 
-                if "catchment_area" in st.session_state and radius_type == 'Travel time (minutes)':
-                    map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
-                else: 
-                    map_caption2 = catchment_size_caption 
+                map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
                 st.caption(map_caption1)
                 st.caption(map_caption2)
             else:
@@ -122,13 +120,12 @@ def main():
         plot_census_data = st.button("Plot Demographic Data")
         st.divider()
         if "catchment_area" in st.session_state:
-            catchment_size = calculate_area_sq_miles(st.session_state.catchment_area.geometry)
             location_caption = 'Location: '+address
             if radius_type == 'Distance (miles)':
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
             else: 
                 radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
-            catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
+            catchment_size_caption = "Catchment size: "+str(st.session_state.catchment_area.area)+" square miles"
             map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
             st.caption(map_caption)
         else:
@@ -138,24 +135,22 @@ def main():
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching demographic data to plot...'):
                     acs_variables = variables_df[(variables_df['Variable Name']==var_name) & (variables_df['Variable Group']==var_group)]['variable'].to_list()
-                    
+                    acs_variable_types = variables_df[(variables_df['Variable Name']==var_name) & (variables_df['Variable Group']==var_group)]['variable_type'].to_list()
+                    acs_variable_dict = dict(zip(acs_variables, acs_variable_types)) # dictionary of variable codes and assocaited variable types
+
                     # Fetch census data for overlapping tracts
-                    st.session_state.catchment_area.demographic_enrichment(census_api, acs_variables, census_year, normalization)
+                    st.session_state.catchment_area.demographic_enrichment(census_api, acs_variable_dict,census_year, normalization)
+                    st.session_state.census_map = plot_census_data_on_map(st.session_state, list(acs_variable_dict)[0], var_name, normalization)
 
-                    st.session_state.census_map = plot_census_data_on_map(st.session_state, acs_variables[0], var_name, normalization)
-
-                    # Generate distribution plot
-                    fig = create_distribution_plot(st.session_state.catchment_area.census_data, acs_variables, var_name, normalization)
-                    
-                    total_population = fetch_census_data_for_tracts(census_api, census_year, ['B01003_001E'], st.session_state.catchment_area.census_tracts, 'No')['B01003_001E'].sum()
-                    if "catchment_area" in st.session_state and radius_type == 'Travel time (minutes)':
-                        st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.catchment_area.iso_properties['total_pop'])))
-                    else:
-                        st.caption('Total population (across entire catchment): '+'{:,}'.format(int(total_population)))
+                    # Generate caption
+                    st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.catchment_area.total_population)))
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
-                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(st.session_state.catchment_area.census_data[acs_variables[0]])):,}')
+                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(st.session_state.catchment_area.census_data[list(acs_variable_dict)[0]])):,}')
                     folium_static(st.session_state.census_map)
                     st.divider()
+
+                    # Generate distribution plot
+                    fig = create_distribution_plot(st.session_state.catchment_area.census_data, list(acs_variable_dict), var_name, normalization)
                     st.subheader("Distribution plot of selected census variable across your catchment area")
                     st.plotly_chart(fig, use_container_width=True)
             else:
@@ -173,13 +168,12 @@ def main():
         st.divider()
         
         if "catchment_area" in st.session_state:
-            catchment_size = calculate_area_sq_miles(st.session_state.catchment_area.geometry)
             location_caption = 'Location: '+address
             if radius_type == 'Distance (miles)':
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
             else: 
                 radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
-            catchment_size_caption = "Catchment size: "+str(catchment_size)+" square miles"
+            catchment_size_caption = "Catchment size: "+str(st.session_state.catchment_area.area)+" square miles"
             map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
             st.caption(map_caption)
         else:

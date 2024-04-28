@@ -1,4 +1,3 @@
-# catchment_area.py
 import geopandas as gpd
 from shapely.geometry import shape, Point
 from shapely.ops import transform
@@ -14,10 +13,12 @@ class CatchmentArea:
         self.location = location
         self.ors_client = ors_client
         self.geometry = None
-        self.properties = None
+        self.iso_properties = None
         self.census_data = None
         self.census_tracts = None
         self.poi_data = None
+        self.area = None
+        self.total_pop = None
 
     def geocode_address(self, address):
         try:
@@ -69,7 +70,7 @@ class CatchmentArea:
         self.iso_properties = response_iso['features'][0]['properties']
         return self.geometry
     
-    def demographic_enrichment(self, census_api, acs_variables, acs_year, normalization):
+    def demographic_enrichment(self, census_api, acs_variable_dict, acs_year, normalization):
         if not self.geometry:
             raise ValueError("Catchment area not defined.")
         states_gdf = load_state_boundaries(acs_year)
@@ -78,7 +79,7 @@ class CatchmentArea:
         overlapping_tracts = calculate_overlapping_tracts(catchment_gdf, intersecting_states, acs_year)
 
         # Fetch census data
-        census_data = fetch_census_data_for_tracts(census_api, acs_year, acs_variables, overlapping_tracts, normalization)
+        census_data = fetch_census_data_for_tracts(census_api, acs_year, acs_variable_dict, overlapping_tracts, normalization)
         self.census_data = census_data
         self.census_tracts = overlapping_tracts
         return census_data, overlapping_tracts
@@ -86,7 +87,37 @@ class CatchmentArea:
     def poi_enrichment(self, categories):
         if not self.geometry:
             raise ValueError("Catchment area not defined.")
-
         poi_data = fetch_poi_within_catchment(self.geometry, categories)
         self.poi_data = poi_data
         return poi_data
+    
+    def calculate_area_sq_miles(self):
+        if not self.geometry:
+            raise ValueError("Catchment area not defined.")
+        proj = partial(pyproj.transform,
+                    pyproj.Proj(init='epsg:4326'),  # Source coordinate system (WGS84)
+                    pyproj.Proj(proj='aea', lat_1=self.geometry.bounds[1], lat_2=self.geometry.bounds[3]))  # Albers Equal Area projection
+        projected_polygon = transform(proj, self.geometry) 
+
+        # Project the polygon to the new coordinate system
+        area_sq_miles = round(projected_polygon.area / 2589988.11,2)  # Convert area from square meters to square miles
+        self.area = area_sq_miles
+        return area_sq_miles
+    
+    def calculate_total_population(self, census_api, acs_year):
+        if not self.geometry:
+            raise ValueError("Catchment area not defined.")
+        if self.radius_type == 'Distance (miles)':
+            states_gdf = load_state_boundaries(acs_year)
+            catchment_gdf = gpd.GeoDataFrame(index=[0], crs='EPSG:4326', geometry=[self.geometry])
+            intersecting_states = find_intersecting_states(catchment_gdf, states_gdf)
+            overlapping_tracts = calculate_overlapping_tracts(catchment_gdf, intersecting_states, acs_year)
+
+            # Fetch population from census
+            total_pop_df = fetch_census_data_for_tracts(census_api, acs_year, {'B01003_001E':'population_count'}, overlapping_tracts, "No")
+            total_pop = total_pop_df['B01003_001E'].sum()
+        else:
+            total_pop = self.iso_properties['total_pop']
+        self.total_population = total_pop
+        return total_pop
+        

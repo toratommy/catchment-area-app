@@ -185,10 +185,17 @@ def fetch_census_variables(api_url):
         variables_df = variables_df[variables_df['label'].str.contains('Estimate')].reset_index()
         variables_df.rename(columns={'level_1':'variable','concept':'Variable Group','label':'Variable Name'}, inplace=True)
         variables_df['Variable Name'] = variables_df['Variable Name'].str.replace('Estimate!!', '').str.replace('!!', ' ')
+
+        # Determine variable type based on the 'Variable Name'
+        variables_df['variable_type'] = variables_df['Variable Name'].apply(
+            lambda x: 'population_count' if x.startswith('Total:') else 'other_metric'
+        )
+
         return variables_df
     except requests.RequestException as e:
         print(f"Failed to fetch variables.json: {e}")
         return None
+
     
 @st.cache_data    
 def load_state_boundaries(census_year):
@@ -249,10 +256,14 @@ def load_tract_shapefile(state_code, census_year):
     gdf = gpd.read_file(url)
     return gdf
 
+import geopandas as gpd
+
 def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
     """
-    Calculates which tracts overlap with the user-defined geography for intersecting states.
-    
+    Calculates which tracts overlap with the user-defined geography for intersecting states
+    and updates tract geometries to the intersection with the user-defined geography.
+    Additionally, calculates the percentage of each tract area that is contained within the catchment.
+
     Parameters
     ----------
     user_gdf : geopandas.GeoDataFrame
@@ -261,35 +272,41 @@ def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
         The state codes of the intersecting states.
     census_year : str
         The year of the census data.
-    
+
     Returns
     -------
     geopandas.GeoDataFrame
-        A GeoDataFrame of overlapping tracts.
+        A GeoDataFrame of overlapping tracts with updated geometries to the intersection areas
+        and a new column indicating the percentage of the original tract covered by the intersection.
     """
     overlapping_tracts = gpd.GeoDataFrame()
     for state_code in state_codes:
         tract_gdf = load_tract_shapefile(state_code, census_year)
-        
-        # Calculate the intersection area between each tract and the user-defined geography
-        tract_gdf['intersection_area'] = tract_gdf.geometry.apply(lambda x: x.intersection(user_gdf.unary_union).area)
-        
-        # Calculate the percentage of each tract covered by the user-defined geography
-        tract_gdf['coverage_percentage'] = (tract_gdf['intersection_area'] / tract_gdf.geometry.area) * 100
-        
-        # Filter tracts where the coverage percentage is greater than 30%
-        tracts_overlapping = tract_gdf[tract_gdf['coverage_percentage'] > 30]
-        
-        overlapping_tracts = pd.concat([overlapping_tracts, tracts_overlapping])
 
-    # Drop the temporary columns used for calculations
-    overlapping_tracts = overlapping_tracts.drop(columns=['intersection_area', 'coverage_percentage'])
+        # Calculate the intersection of each tract with the user-defined geography
+        tract_gdf['intersection'] = tract_gdf.geometry.apply(lambda x: x.intersection(user_gdf.unary_union))
+
+        # Calculate the percentage of the tract area contained within the catchment
+        tract_gdf['coverage_percentage'] = tract_gdf.apply(lambda row: (row['intersection'].area / row['geometry'].area), axis=1)
+        
+        # Update the geometry to the intersection
+        tract_gdf['geometry'] = tract_gdf['intersection']
+        
+        # Keep only tracts that have a non-empty intersection and at least some land area
+        tract_gdf = tract_gdf[(~tract_gdf.geometry.is_empty) & (tract_gdf['ALAND']>0)]
+        
+        # Drop the temporary 'intersection' column as it's no longer needed
+        tract_gdf = tract_gdf.drop(columns=['intersection'])
+
+        overlapping_tracts = pd.concat([overlapping_tracts, tract_gdf], ignore_index=True)
 
     return overlapping_tracts
 
-def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping_tracts, normalization):
+
+def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlapping_tracts, normalization):
     """
-    Fetches census data for tracts within overlapping tracts dataframe.
+    Fetches census data for tracts within overlapping tracts dataframe, scaling data for 'population_count' variables 
+    by the 'coverage_percentage'.
     
     Parameters
     ----------
@@ -297,8 +314,8 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
         The Census API client.
     census_year : str
         The year of the census.
-    variables : list of str
-        The list of variables to fetch.
+    variable_dict : dictionary
+        A dictionary containing the variable codes and assocaited variable types.
     overlapping_tracts : geopandas.GeoDataFrame
         The GeoDataFrame of overlapping tracts.
     normalization : str
@@ -309,33 +326,35 @@ def fetch_census_data_for_tracts(census_api, census_year, variables, overlapping
     pandas.DataFrame
         A DataFrame containing the fetched census data.
     """
-    # Prepare an empty DataFrame to hold fetched census data
-    all_census_data = pd.DataFrame()
-
     # Group the overlapping tracts by state and county for batch fetching
     for (state_code, county_code), group in overlapping_tracts.groupby(['STATEFP', 'COUNTYFP']):
         # Fetch census data for all tracts within this state and county
         if normalization == 'Yes':
-            fetch_vars = variables+['B01003_001E']
+            fetch_vars = list(variable_dict.keys())+['B01003_001E'] # add population variable which will be used for normalization
         else:
-            fetch_vars = variables
+            fetch_vars = list(variable_dict.keys())
         
-        tracts_data = census_api.acs5.state_county_tract(fetch_vars, state_code, county_code, Census.ALL, year=census_year)
+        census_json = census_api.acs5.state_county_tract(fetch_vars, state_code, county_code, Census.ALL, year=census_year)
         # Convert the fetched data into a DataFrame
-        tracts_df = pd.DataFrame(tracts_data)
+        census_data = pd.DataFrame(census_json)
         
         # Convert GEOID to a format that matches the overlapping_tracts for comparison
-        tracts_df['GEOID'] = tracts_df.apply(lambda row: f"{row['state']}{row['county']}{row['tract']}", axis=1)
+        census_data['GEOID'] = census_data.apply(lambda row: f"{row['state']}{row['county']}{row['tract']}", axis=1)
         
         # Filter the data to only include those tracts that are in the overlapping_tracts DataFrame
-        tracts_df = tracts_df[tracts_df['GEOID'].isin(overlapping_tracts['GEOID'])]
-        
-        # Append the filtered data to the all_census_data DataFrame
-        all_census_data = pd.concat([all_census_data, tracts_df], ignore_index=True)
-        if normalization == 'Yes':
-            all_census_data['population_normalized'] = all_census_data[variables[0]]/all_census_data['B01003_001E']
+        census_data = census_data.merge(overlapping_tracts[['GEOID','coverage_percentage']], left_on='GEOID', right_on='GEOID', how='inner')
 
-    return all_census_data
+        # Scale the data for variables of type 'population_count' by 'coverage_percentage'
+        for var, vtype in variable_dict.items():
+            if vtype == 'population_count':
+                census_data[var] = census_data[var] * census_data['coverage_percentage']
+
+        if normalization == 'Yes':
+            # scale total population by 'coverage_percentage'
+            census_data['B01003_001E'] = census_data['B01003_001E'] * census_data['coverage_percentage']
+            census_data['population_normalized'] = census_data[list(variable_dict)[0]]/census_data['B01003_001E']
+
+    return census_data
 
 def plot_census_data_on_map(session_state, census_variable, var_name, normalization):
     """
@@ -366,6 +385,8 @@ def plot_census_data_on_map(session_state, census_variable, var_name, normalizat
         m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
+    folium.GeoJson(mapping(session_state.catchment_area.geometry), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
+    
     # Existing code for merging data and adding GeoJson layer
     merged_data = session_state.catchment_area.census_tracts.merge(session_state.catchment_area.census_data, left_on='GEOID', right_on='GEOID')
     geojson_data = merged_data.to_json()
@@ -420,28 +441,6 @@ def get_color(value, deciles):
         if value <= threshold:
             return colors[i]
     return colors[-1]  # Use the last color for values in the highest decile
-
-def calculate_area_sq_miles(catchment_area):
-    """
-    Calculates the area of a user-defined polygon in square miles.
-
-    Parameters
-    ----------
-    catchment_area : shapely.geometry.Polygon
-        A polygon in latitude and longitude coordinates.
-
-    Returns
-    -------
-    float
-        The area of the polygon in square miles.
-    """
-    proj = partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:4326'),  # Source coordinate system (WGS84)
-                   pyproj.Proj(proj='aea', lat_1=catchment_area.bounds[1], lat_2=catchment_area.bounds[3]))  # Albers Equal Area projection
-    projected_polygon = transform(proj, catchment_area) 
-     # Project the polygon to the new coordinate system
-    area_sq_miles = round(projected_polygon.area / 2589988.11,2)  # Convert area from square meters to square miles
-    return area_sq_miles
 
 def create_distribution_plot(census_data, variables, var_name, normalization):
     """
