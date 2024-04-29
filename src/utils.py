@@ -534,7 +534,8 @@ def plot_poi_data_on_map(session_state, map_type):
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
     folium.GeoJson(mapping(session_state.catchment_area.geometry), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
-    
+    folium.Marker([session_state.catchment_area.location.latitude, session_state.catchment_area.location.longitude],
+                  popup='Catchment Location', icon=folium.Icon(color='red', prefix='fa',icon='map-pin'), tooltip=session_state.catchment_area.address).add_to(m)
     if map_type == 'Heatmap (POI density)':
         heatmap_points = []
     

@@ -16,6 +16,7 @@ from src.catchment_area import CatchmentArea
 # TO DO:
 # add in building, services, tourism POI
 # add distance to nearest on POI page
+# add name filter to POI map
 
 # add census data profiles
 # add real estate data
@@ -40,7 +41,7 @@ def main():
     st._config.set_option(f'theme.textColor',"#262730")
 
     st.title("Catchment Area Explorer")
-    tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Overlay", "POI Overlay", "How It Works"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Generate Catchment Area", "Demographic Insights", "Point of Interest Insights", "How It Works"])
     # User inputs
     with st.sidebar:
         st.image('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
@@ -77,7 +78,8 @@ def main():
             # Generate catchment area
             if generate_catchment:
                 with st.spinner('Generating catchment area...'):
-                    st.session_state.catchment_area = CatchmentArea(st.session_state.location, 
+                    st.session_state.catchment_area = CatchmentArea(address,
+                                                                    st.session_state.location, 
                                                                     radius_type, 
                                                                     radius,   
                                                                     travel_profile,
@@ -107,7 +109,8 @@ def main():
             # Display existing catchment area on map if available
             if 'catchment_area' in st.session_state:
                 folium.GeoJson(st.session_state.catchment_area.geometry, style_function=lambda x: {'fillColor': 'blue', 'color': 'blue'}).add_to(st.session_state.catchment_map)
-            
+                folium.Marker([st.session_state.catchment_area.location.latitude, st.session_state.catchment_area.location.longitude],
+                              popup='Catchment Location', icon=folium.Icon(color='red', prefix='fa',icon='map-pin'), tooltip=st.session_state.catchment_area.address).add_to(st.session_state.catchment_map)
             folium_static(st.session_state.catchment_map)
         else:
             st.error("Could not geocode the address. Please try another address or check the geocoding service.")
@@ -161,7 +164,7 @@ def main():
             folium_static(st.session_state.catchment_map)
         
     with tab3:
-        st.subheader('Overlay POI data within your catchment')
+        st.subheader('Overlay point-of-interest (POI) data within your catchment')
         # read in list of amenities
         with open('src/amenities.pkl', 'rb') as f:
             amenity_list = pickle.load(f)
@@ -215,12 +218,12 @@ def main():
                     Upon clicking the `Generate Catchment Area` button, view your catchment area on the interactive map and adjust as needed by changing the 
                     parameters in the left control panel.
                     ''')
-        st.markdown('''2. Overlaying Demographics: Next, navigate to the `Overlay Demographics` tab to plot population demographics within your catchment area. Select a variable of interest, 
+        st.markdown('''2. Overlaying Demographics: Next, navigate to the `Demographic Insights` tab to plot population demographics within your catchment area. Select a variable of interest, 
                     and specify whether or not you'd like to normalize by population (i.e., plotting percent of population with selected variable vs plotting total number of people with selected variable).
                     Upon clicking the `Plot Demographic Data` button, you can view the interactive heatmap of your selected variable in your catchment area, and assess the distribution
                     plot below which shows the variable's distribution across all census tracts in your catchment area.
                     ''')
-        st.markdown('''3. Overlaying Points-of-Interest: Finally, navigate to the `POI Overlay` tab to plot points of interest within your catchment area.
+        st.markdown('''3. Overlaying Points-of-Interest: Finally, navigate to the `Point of Interest Insights` tab to plot points of interest within your catchment area.
                     Select your POI categoy (e.g., cafes, fast food, dentist, car wash, etc.) and specify your map type (POI markers or heatmap). Upon clicking the
                     `Plot POI Data` button, you can view your points-of-interest within your catchment area using the interactive map.
                     ''')

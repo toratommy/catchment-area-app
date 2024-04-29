@@ -6,11 +6,12 @@ import pyproj
 from src.utils import load_state_boundaries, find_intersecting_states, calculate_overlapping_tracts, fetch_census_data_for_tracts, fetch_poi_within_catchment
 
 class CatchmentArea:
-    def __init__(self, location, radius_type, radius, travel_profile=None, ors_client=None):
+    def __init__(self, address, location, radius_type, radius, travel_profile=None, ors_client=None):
+        self.address = address
+        self.location = location
         self.radius_type = radius_type
         self.radius = radius
         self.travel_profile = travel_profile
-        self.location = location
         self.ors_client = ors_client
         self.geometry = None
         self.iso_properties = None
