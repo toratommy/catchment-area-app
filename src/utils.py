@@ -4,17 +4,13 @@ from geopy.geocoders import Nominatim
 import pandas as pd
 import requests
 import geopandas as gpd
-from shapely.geometry import Point, shape
-from shapely.ops import transform
-import pyproj
-from functools import partial
+import numpy as np
 from census import Census
 from scipy import *
 import plotly.figure_factory as ff
 import osmnx as ox
 from folium.plugins import HeatMap
 from folium.raster_layers import WmsTileLayer
-from folium.raster_layers import TileLayer
 from shapely.geometry import mapping
 from folium.plugins import Fullscreen
 
@@ -556,23 +552,71 @@ def plot_poi_data_on_map(session_state, map_type):
     m.fit_bounds(session_state.bounds)
     return m
 
-def display_poi_counts(pois_gdf):
+def display_poi_counts(catchment_area):
     """
     Displays the total counts of POI locations by category.
     
     Parameters
     ----------
-    pois_gdf : geopandas.GeoDataFrame
-        The GeoDataFrame containing POI data.
+    catchment_area : CatchmentArea
+        A catchment area object from the CatchmentArea class.
     
     Returns
     -------
     None
     """
-    if not pois_gdf.empty and 'amenity' in pois_gdf.columns:
-        counts = pois_gdf['amenity'].value_counts()
+    if not catchment_area.poi_data.empty and 'amenity' in catchment_area.poi_data.columns:
+        counts = catchment_area.poi_data['amenity'].value_counts()
         for category, count in counts.items():
-            st.write(f"`{category}`: {count} distinct locations")
-            #st.dataframe(pois_gdf[['amenity','name','addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']])
+            st.write(f"`{category}`: {count} distinct locations | {np.round(((count / catchment_area.total_population) * 10000),2)} distinct locations per 10,000 persons")
     else:
         st.write("No POI data available.")
+
+import plotly.express as px
+
+@st.experimental_fragment
+def plot_poi_bar_chart(catchment_area):
+    """
+    Plots a bar chart of POI data using Plotly.
+
+    Parameters:
+    - catchment_area (CatchmentArea): a catchment area object from the CatchmetnArea class.
+    - metric_type (str): A string that determines the metric to be plotted. Can be 'location count' or 'locations per capita'.
+
+    Returns:
+    - fig (plotly.graph_objects.Figure): The Plotly figure object that can be displayed with fig.show().
+    """
+
+    metric_type = st.selectbox('Select Metric',['Location count','Locations per capita'], index=1)
+    pois_gdf = catchment_area.poi_data
+
+    if not pois_gdf.empty:
+        plot_df = pois_gdf['name'].value_counts().to_frame('count').reset_index()
+
+        if metric_type not in ['Location count', 'Locations per capita']:
+            raise ValueError("Invalid metric type provided. Choose 'location count' or 'locations per capita'.")
+
+        # Calculate the metric
+        if metric_type == 'Locations per capita':
+            plot_df['metric'] = (plot_df['count'] / catchment_area.total_population) * 10000
+            x_title = "Locations per Capita (per 10,000 persons)"
+        else:
+            plot_df['metric'] = plot_df['count']
+            x_title = "Location Count"
+
+        # Create the plot
+        fig = px.bar(plot_df, y='name', x='metric', orientation='h',
+                    title="Points of Interest Analysis",
+                    labels={'name': 'Location Name', 'metric': x_title},
+                    height=600, width=800)
+        
+        # Filter the DataFrame to only include the top 20 locations based on the metric
+        top_locations = plot_df.nlargest(20, 'metric')
+
+        # Create the plot
+        fig = px.bar(top_locations, y='name', x='metric', orientation='h',
+                    title=f'Top 20 Points of Interest by {x_title}',
+                    labels={'location_name': 'Location Name', 'metric': x_title},
+                    height=600, width=800)
+        fig.update_layout(yaxis={'categoryorder': 'total ascending'}, xaxis_title=x_title, yaxis_title="Location Name")
+        st.plotly_chart(fig, use_container_width=True)

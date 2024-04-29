@@ -113,9 +113,12 @@ def main():
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
             else: 
                 radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
-            catchment_size_caption = "Catchment size: "+str(st.session_state.catchment_area.area)+" square miles"
-            map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
-            st.caption(map_caption)
+            total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.catchment_area.total_population))
+            catchment_size_caption = "Catchment size: "+'{:,}'.format(st.session_state.catchment_area.area)+" square miles"
+            map_caption1 = location_caption + ' | ' + radius_caption 
+            map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
+            st.caption(map_caption1)
+            st.caption(map_caption2)
         else:
             st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')  
         #fetch and plot census data
@@ -131,7 +134,6 @@ def main():
                     st.session_state.census_map = plot_census_data_on_map(st.session_state, list(acs_variable_dict)[0], var_name, normalization)
 
                     # Generate caption
-                    st.caption('Total population (across entire catchment): '+'{:,}'.format(int(st.session_state.catchment_area.total_population)))
                     if ('Total:' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(st.session_state.catchment_area.census_data[list(acs_variable_dict)[0]])):,}')
                     folium_static(st.session_state.census_map)
@@ -161,20 +163,26 @@ def main():
                 radius_caption = 'Catchment radius: '+str(radius)+' miles'
             else: 
                 radius_caption = 'Catchment radius: '+str(radius)+' minutes by '+travel_profile.lower()
-            catchment_size_caption = "Catchment size: "+str(st.session_state.catchment_area.area)+" square miles"
-            map_caption = location_caption + ' | ' + radius_caption + ' | ' + catchment_size_caption
-            st.caption(map_caption)
+            total_pop_caption = 'Estimated catchment population: ' + '{:,}'.format(int(st.session_state.catchment_area.total_population))
+            catchment_size_caption = "Catchment size: "+'{:,}'.format(st.session_state.catchment_area.area)+" square miles"
+            map_caption1 = location_caption + ' | ' + radius_caption 
+            map_caption2 = catchment_size_caption + ' | ' + total_pop_caption
+            st.caption(map_caption1)
+            st.caption(map_caption2)
         else:
             st.caption('No catchment generated. Use left control panel to define and generate your catchment area.')  
         #fetch and plot poi data
         if plot_poi_data:
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching POI data to plot...'):
-                    time.sleep(5)
+                    time.sleep(2)
                     st.session_state.catchment_area.poi_enrichment(poi_categories)
-                display_poi_counts(st.session_state.catchment_area.poi_data)
+                display_poi_counts(st.session_state.catchment_area)
                 st.session_state.poi_map = plot_poi_data_on_map(st.session_state, poi_map_type)
                 folium_static(st.session_state.poi_map)
+                st.divider()
+                if not st.session_state.catchment_area.poi_data.empty:
+                    plot_poi_bar_chart(st.session_state.catchment_area)
             else:
                 st.error('Must generate catchment area first before overlaying census data. Please define and generate your catchment area using the left control panel.')
         else:
