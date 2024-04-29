@@ -14,7 +14,6 @@ from folium.plugins import Fullscreen
 from src.catchment_area import CatchmentArea
 
 # TO DO:
-# add in building, services, tourism POI
 # add distance to nearest on POI page
 # add name filter to POI map
 
@@ -149,7 +148,7 @@ def main():
                     st.session_state.census_map = plot_census_data_on_map(st.session_state, list(acs_variable_dict)[0], var_name, normalization)
 
                     # Generate caption
-                    if ('Total:' in var_name) or ('Aggregate' in var_name):
+                    if ('Total' in var_name) or ('Aggregate' in var_name):
                         st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(st.session_state.catchment_area.census_data[list(acs_variable_dict)[0]])):,}')
                     folium_static(st.session_state.census_map)
                     st.divider()
@@ -166,9 +165,9 @@ def main():
     with tab3:
         st.subheader('Overlay point-of-interest (POI) data within your catchment')
         # read in list of amenities
-        with open('src/amenities.pkl', 'rb') as f:
-            amenity_list = pickle.load(f)
-        poi_categories, poi_map_type = make_poi_selections(amenity_list)
+        with open('src/osm_tags.pkl', 'rb') as f:
+            osm_tags = pickle.load(f)
+        poi_tags, poi_map_type = make_poi_selections(osm_tags)
         plot_poi_data = st.button("Plot POI data")
         st.divider()
         
@@ -191,8 +190,8 @@ def main():
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching POI data to plot...'):
                     time.sleep(2)
-                    st.session_state.catchment_area.poi_enrichment(poi_categories)
-                display_poi_counts(st.session_state.catchment_area)
+                    st.session_state.catchment_area.poi_enrichment(poi_tags)
+                display_poi_counts(poi_tags, st.session_state.catchment_area)
                 st.session_state.poi_map = plot_poi_data_on_map(st.session_state, poi_map_type)
                 folium_static(st.session_state.poi_map)
                 st.divider()

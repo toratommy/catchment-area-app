@@ -98,23 +98,24 @@ def make_census_variable_selections(filters_dict):
     return var_group, var_name, normalization
 
 @st.experimental_fragment
-def make_poi_selections(amenity_list):
+def make_poi_selections(osm_tags):
     """
     Display widgets for selecting POI categories and mapping preferences.
 
     Parameters
     ----------
-    amenity_list : list
-        A list of POI categories to choose from.
+    osm_tags: dictionary
+        A dictionary of POI groups and assocaited categories to choose from.
 
     Returns
     -------
     tuple
-        A tuple containing the list of selected POI categories as a list of strings, and the chosen map type as a string.
+        A tuple containing the list of selected POI group/categories as a dictionary, and the chosen map type as a string.
     """
-    poi_categories = st.multiselect('Select POI categories to map',amenity_list)
-    poi_map_type = st.radio('Choose map type:', ['POI markers','Heatmap (POI density)'])
-    return poi_categories, poi_map_type
+    poi_group = st.selectbox('Select POI group',list(osm_tags.keys()))
+    poi_categories = st.multiselect('Select POI categories',osm_tags[poi_group])
+    poi_map_type = st.radio('Choose map type', ['POI markers','Heatmap (POI density)'])
+    return {poi_group: poi_categories}, poi_map_type
 
 def geocode_address(address):
     """
@@ -191,9 +192,7 @@ def fetch_census_variables(api_url):
     except requests.RequestException as e:
         print(f"Failed to fetch variables.json: {e}")
         return None
-
-    
-@st.cache_data    
+  
 def load_state_boundaries(census_year):
     """
     Loads state boundaries using the US Census Bureau's cartographic boundary files for a given year.
@@ -231,7 +230,6 @@ def find_intersecting_states(user_gdf, states_gdf):
     intersecting_states = states_gdf[states_gdf.intersects(user_gdf.unary_union)]
     return intersecting_states['GEOID']
 
-@st.cache_data
 def load_tract_shapefile(state_code, census_year):
     """
     Loads a census tract shapefile from the Census website for a given state code and year.
@@ -322,6 +320,8 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
     pandas.DataFrame
         A DataFrame containing the fetched census data.
     """
+    census_data_full = pd.DataFrame()
+
     # Group the overlapping tracts by state and county for batch fetching
     for (state_code, county_code), group in overlapping_tracts.groupby(['STATEFP', 'COUNTYFP']):
         # Fetch census data for all tracts within this state and county
@@ -350,7 +350,10 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
             census_data['B01003_001E'] = census_data['B01003_001E'] * census_data['coverage_percentage']
             census_data['population_normalized'] = census_data[list(variable_dict)[0]]/census_data['B01003_001E']
 
-    return census_data
+        # Append the filtered data to the all_census_data DataFrame
+        census_data_full = pd.concat([census_data_full, census_data], ignore_index=True)
+
+    return census_data_full
 
 def plot_census_data_on_map(session_state, census_variable, var_name, normalization):
     """
@@ -475,7 +478,7 @@ def create_distribution_plot(census_data, variables, var_name, normalization):
     )
     return fig
 
-def fetch_poi_within_catchment(catchment_polygon, category):
+def fetch_poi_within_catchment(catchment_polygon, poi_tags):
     """
     Fetch points of interest within a specified catchment area polygon and category.
 
@@ -483,8 +486,8 @@ def fetch_poi_within_catchment(catchment_polygon, category):
     ----------
     catchment_polygon: 
         A Shapely Polygon defining the catchment area.
-    category: 
-        A string representing the OSM category of interest (e.g., 'cafe', 'restaurant').
+    poi_tags: 
+        A dictionary representing the OSM group and categories of interest (e.g., {'amenity':['cafe', 'restaurant']}).
 
     Returns:
     -------
@@ -493,7 +496,8 @@ def fetch_poi_within_catchment(catchment_polygon, category):
     """
     try:
         # Define the tags for OSM queries based on the specified category
-        tags = {'amenity': category}
+        key = list(poi_tags.keys())[0]
+        tags = {key: poi_tags[key]}
         
         # Attempt to fetch POIs within the catchment area polygon
         pois_gdf = ox.features_from_polygon(catchment_polygon, tags=tags)
@@ -553,21 +557,24 @@ def plot_poi_data_on_map(session_state, map_type):
     m.fit_bounds(session_state.bounds)
     return m
 
-def display_poi_counts(catchment_area):
+def display_poi_counts(poi_tags, catchment_area):
     """
     Displays the total counts of POI locations by category.
     
     Parameters
     ----------
+    poi_tags: 
+        A dictionary representing the OSM group and categories of interest (e.g., {'amenity':['cafe', 'restaurant']}).
     catchment_area : CatchmentArea
         A catchment area object from the CatchmentArea class.
-    
+
     Returns
     -------
     None
     """
-    if not catchment_area.poi_data.empty and 'amenity' in catchment_area.poi_data.columns:
-        counts = catchment_area.poi_data['amenity'].value_counts()
+    key = list(poi_tags.keys())[0]
+    if not catchment_area.poi_data.empty:
+        counts = catchment_area.poi_data[key].value_counts()
         for category, count in counts.items():
             st.write(f"`{category}`: {count} distinct locations | {np.round(((count / catchment_area.total_population) * 10000),2)} distinct locations per 10,000 persons")
     else:
