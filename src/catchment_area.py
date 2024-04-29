@@ -6,11 +6,12 @@ import pyproj
 from src.utils import load_state_boundaries, find_intersecting_states, calculate_overlapping_tracts, fetch_census_data_for_tracts, fetch_poi_within_catchment
 
 class CatchmentArea:
-    def __init__(self, location, radius_type, radius, travel_profile=None, ors_client=None):
+    def __init__(self, address, location, radius_type, radius, travel_profile=None, ors_client=None):
+        self.address = address
+        self.location = location
         self.radius_type = radius_type
         self.radius = radius
         self.travel_profile = travel_profile
-        self.location = location
         self.ors_client = ors_client
         self.geometry = None
         self.iso_properties = None
@@ -84,10 +85,10 @@ class CatchmentArea:
         self.census_tracts = overlapping_tracts
         return census_data, overlapping_tracts
     
-    def poi_enrichment(self, categories):
+    def poi_enrichment(self, poi_tags):
         if not self.geometry:
             raise ValueError("Catchment area not defined.")
-        poi_data = fetch_poi_within_catchment(self.geometry, categories)
+        poi_data = fetch_poi_within_catchment(self.geometry, poi_tags)
         self.poi_data = poi_data
         return poi_data
     
