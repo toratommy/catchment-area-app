@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_folium import folium_static
 import folium
 from geopy.geocoders import Nominatim
 import pandas as pd
@@ -13,6 +14,7 @@ from folium.plugins import HeatMap
 from folium.raster_layers import WmsTileLayer
 from shapely.geometry import mapping
 from folium.plugins import Fullscreen
+from requests_cache import install_cache
 
 def update_map_layer(session_state):
     # Update the tile layer based on user selection without resetting the existing overlays
@@ -47,9 +49,15 @@ def map_tile_layer_selections():
     return tile_layer_value, tile_layer_type
 
 @st.experimental_fragment
-def make_catchment_area_selections():
+def make_catchment_area_selections(default_address):
     """
     Display widgets to collect user inputs for generating a catchment area.
+
+    Parameters
+    ----------
+    default_address: str
+        The default address to show text box.
+
 
     Returns
     -------
@@ -58,8 +66,8 @@ def make_catchment_area_selections():
         and the specified radius as an integer.
     """
     address = st.text_input("Enter the Address", 
-                            value='1 N Halsted St, Chicago, IL 60661')
-    radius_type = st.selectbox("Enter Radius Type", 
+                            value=default_address)
+    radius_type = st.selectbox("Select Radius Type", 
                                ["Distance (miles)", "Travel time (minutes)"], 
                                index = 1)
     if radius_type ==  'Travel time (minutes)':
@@ -117,24 +125,30 @@ def make_poi_selections(osm_tags):
     poi_map_type = st.radio('Choose map type', ['POI markers','Heatmap (POI density)'])
     return {poi_group: poi_categories}, poi_map_type
 
-def geocode_address(address):
+def geocode_address(address, nominatim_client):
     """
-    Geocodes an address to a latitude and longitude.
+    Geocodes an address to a latitude and longitude using caching.
     
     Parameters
     ----------
     address : str
         The address to geocode.
+    nominatim_client : str
+        The Nominatim client user-agent.
     
     Returns
     -------
     geopy.location.Location or None
         The location object for the address or None if geocoding fails.
     """
-    geolocator = Nominatim(user_agent="catchment_area_explorer")
+    # Set up cache with requests_cache
+    install_cache('nominatim_cache', backend='sqlite', expire_after=86400)  # Cache expires after 86400 seconds (one day)
+    
+    geolocator = Nominatim(user_agent=nominatim_client)
     try:
-        return geolocator.geocode(address)
-    except:
+        return geolocator.geocode(address, timeout=5)
+    except Exception as e:
+        st.error(f"Error geocoding address: {str(e)}")
         return None
 
 def plot_catchment_area(session_state):
@@ -161,7 +175,7 @@ def plot_catchment_area(session_state):
 @st.cache_data    
 def fetch_census_variables(api_url):
     """
-    Fetches census variables from the U.S. Census API.
+    Fetches census variables from the U.S. Census API with caching.
     
     Parameters
     ----------
@@ -173,6 +187,9 @@ def fetch_census_variables(api_url):
     pandas.DataFrame or None
         A DataFrame containing the census variables and metadata, or None if the fetch fails.
     """
+    # Install a cache named 'census_var_api_cache', stored as a SQLite DB, which lasts for one day (86400 seconds)
+    install_cache('census_var_api_cache', backend='sqlite', expire_after=86400)
+
     variables_url = f"{api_url}/variables.json"
     try:
         response = requests.get(variables_url)
@@ -190,9 +207,10 @@ def fetch_census_variables(api_url):
 
         return variables_df
     except requests.RequestException as e:
-        print(f"Failed to fetch variables.json: {e}")
+        st.error(f"Failed to fetch variables.json: {e}")
         return None
-  
+
+@st.cache_data 
 def load_state_boundaries(census_year):
     """
     Loads state boundaries using the US Census Bureau's cartographic boundary files for a given year.
@@ -230,6 +248,7 @@ def find_intersecting_states(user_gdf, states_gdf):
     intersecting_states = states_gdf[states_gdf.intersects(user_gdf.unary_union)]
     return intersecting_states['GEOID']
 
+@st.cache_data 
 def load_tract_shapefile(state_code, census_year):
     """
     Loads a census tract shapefile from the Census website for a given state code and year.
@@ -249,8 +268,6 @@ def load_tract_shapefile(state_code, census_year):
     url = f"https://www2.census.gov/geo/tiger/TIGER{census_year}/TRACT/tl_{census_year}_{state_code}_tract.zip"
     gdf = gpd.read_file(url)
     return gdf
-
-import geopandas as gpd
 
 def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
     """
@@ -300,7 +317,7 @@ def calculate_overlapping_tracts(user_gdf, state_codes, census_year):
 def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlapping_tracts, normalization):
     """
     Fetches census data for tracts within overlapping tracts dataframe, scaling data for 'population_count' variables 
-    by the 'coverage_percentage'.
+    by the 'coverage_percentage', with API request caching.
     
     Parameters
     ----------
@@ -309,7 +326,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
     census_year : str
         The year of the census.
     variable_dict : dictionary
-        A dictionary containing the variable codes and assocaited variable types.
+        A dictionary containing the variable codes and associated variable types.
     overlapping_tracts : geopandas.GeoDataFrame
         The GeoDataFrame of overlapping tracts.
     normalization : str
@@ -320,6 +337,9 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
     pandas.DataFrame
         A DataFrame containing the fetched census data.
     """
+    # Enable caching for API requests; cache will last for one day (86400 seconds)
+    install_cache('census_api_cache', backend='sqlite', expire_after=86400)
+
     census_data_full = pd.DataFrame()
 
     # Group the overlapping tracts by state and county for batch fetching
@@ -338,7 +358,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
         census_data['GEOID'] = census_data.apply(lambda row: f"{row['state']}{row['county']}{row['tract']}", axis=1)
         
         # Filter the data to only include those tracts that are in the overlapping_tracts DataFrame
-        census_data = census_data.merge(overlapping_tracts[['GEOID','coverage_percentage']], left_on='GEOID', right_on='GEOID', how='inner')
+        census_data = census_data.merge(overlapping_tracts[['GEOID', 'coverage_percentage']], on='GEOID', how='inner')
 
         # Scale the data for variables of type 'population_count' by 'coverage_percentage'
         for var, vtype in variable_dict.items():
@@ -348,7 +368,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
         if normalization == 'Yes':
             # scale total population by 'coverage_percentage'
             census_data['B01003_001E'] = census_data['B01003_001E'] * census_data['coverage_percentage']
-            census_data['population_normalized'] = census_data[list(variable_dict)[0]]/census_data['B01003_001E']
+            census_data['population_normalized'] = census_data[list(variable_dict)[0]] / census_data['B01003_001E']
 
         # Append the filtered data to the all_census_data DataFrame
         census_data_full = pd.concat([census_data_full, census_data], ignore_index=True)
@@ -412,7 +432,7 @@ def plot_census_data_on_map(session_state, census_variable, var_name, normalizat
                                       localize=True)
     ).add_to(m)
     m.fit_bounds(session_state.bounds)
-    return m
+    folium_static(m)
 
     
 def get_color(value, deciles):
@@ -480,7 +500,7 @@ def create_distribution_plot(census_data, variables, var_name, normalization):
 
 def fetch_poi_within_catchment(catchment_polygon, poi_tags):
     """
-    Fetch points of interest within a specified catchment area polygon and category.
+    Fetch points of interest within a specified catchment area polygon and category, with API request caching.
 
     Parameters
     ----------
@@ -491,9 +511,12 @@ def fetch_poi_within_catchment(catchment_polygon, poi_tags):
 
     Returns:
     -------
-    GeoDataFrame()
+    GeoDataFrame
         GeoDataFrame containing the fetched POI data.
     """
+    # Enable caching for API requests; cache will last for two days (172800 seconds)
+    install_cache('osm_poi_cache', backend='sqlite', expire_after=172800)
+
     try:
         # Define the tags for OSM queries based on the specified category
         key = list(poi_tags.keys())[0]
@@ -501,20 +524,23 @@ def fetch_poi_within_catchment(catchment_polygon, poi_tags):
         
         # Attempt to fetch POIs within the catchment area polygon
         pois_gdf = ox.features_from_polygon(catchment_polygon, tags=tags)
+        pois_gdf.dropna(subset=["name"], inplace=True)
         
         # Check if the returned GeoDataFrame is empty
         if pois_gdf.empty:
-            print("No data returned for the specified category within the catchment area.")
+            st.error("No data returned for the specified category within the catchment area.")
             return gpd.GeoDataFrame()  # Return an empty GeoDataFrame
         
         return pois_gdf
     except Exception as e:
-        print(f"An error occurred while fetching POIs: {e}")
-        return gpd.GeoDataFrame()  
+        st.error(f"An error occurred while fetching POIs: {e}")
+        return gpd.GeoDataFrame(columns = [key,'name'])
     
 def plot_poi_data_on_map(session_state, map_type):
     """
-    Plots POI data on a map, either as markers or a heatmap, based on the specified map type.
+    Plots POI data on a map with interactive layer controls for selecting POI names,
+    either as markers or a heatmap, based on the specified map type. Each POI name groups
+    all associated locations into a single layer.
     
     Parameters
     ----------
@@ -526,36 +552,48 @@ def plot_poi_data_on_map(session_state, map_type):
     Returns
     -------
     folium.Map
-        The map with POI data plotted.
+        The map with interactive POI data plotted.
     """
-    # Create a map centered around the catchment area using the user-selected map layer
+    # Create a map centered around the catchment area
     map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
-    m = folium.Map(location=map_center, tiles=None, zoom_start=13)
-    if session_state.tile_layer_type == 'WMS':
-        session_state.tile_layer_value.add_to(m)
-    else:
-        m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
+    m = folium.Map(location=map_center, zoom_start=12, tiles='OpenStreetMap')
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
-    folium.GeoJson(mapping(session_state.catchment_area.geometry), style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
-    folium.Marker([session_state.catchment_area.location.latitude, session_state.catchment_area.location.longitude],
-                  popup='Catchment Location', icon=folium.Icon(color='red', prefix='fa',icon='map-pin'), tooltip=session_state.catchment_area.address).add_to(m)
-    if map_type == 'Heatmap (POI density)':
-        heatmap_points = []
-    
-    for _, poi in session_state.catchment_area.poi_data.iterrows():
-        poi_location = poi.geometry.centroid.coords[0]
-        if map_type == 'POI markers':
-            folium.Marker(location=[poi_location[1], 
-                                    poi_location[0]], 
-                                    popup=f"{poi.get('name', 'Unnamed')} - {', '.join(filter(None, [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]))}").add_to(m)
-        elif map_type == 'Heatmap (POI density)':
-            heatmap_points.append([poi_location[1], poi_location[0]])
+    folium.GeoJson(session_state.catchment_area.geometry, style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
+    folium.Marker([session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x],
+                  popup='Catchment Location', icon=folium.Icon(color='red', prefix='fa', icon='map-pin'), tooltip=session_state.catchment_area.address).add_to(m)
+
+    # Group POI data by name
+    grouped_poi_data = session_state.catchment_area.poi_data.groupby('name')
 
     if map_type == 'Heatmap (POI density)':
-        HeatMap(heatmap_points).add_to(m)
-    m.fit_bounds(session_state.bounds)
-    return m
+        heatmap_points = []
+
+    # Add each POI name group as a separate layer
+    for poi_name, group in grouped_poi_data:
+        layer_group = folium.FeatureGroup(name=poi_name)
+
+        for _, poi in group.iterrows():
+            poi_location = [poi.geometry.centroid.y, poi.geometry.centroid.x]
+            if map_type == 'POI markers':
+                folium.Marker(location=poi_location,
+                              popup=f"{poi_name} - {', '.join(filter(None, [str(poi.get(field, '')) for field in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:state', 'addr:postcode']]))}",
+                              tooltip=poi_name).add_to(layer_group)
+            elif map_type == 'Heatmap (POI density)':
+                heatmap_points.append(poi_location)
+
+        if map_type == 'POI markers':
+            layer_group.add_to(m)
+
+    if map_type == 'Heatmap (POI density)':
+        HeatMap(heatmap_points, name="Heatmap").add_to(m)
+    else:
+        # Ensure LayerControl is added after all layers have been added to the map
+        folium.LayerControl().add_to(m)
+
+
+    m.fit_bounds(session_state.catchment_area.geometry.bounds)
+    folium_static(m)
 
 def display_poi_counts(poi_tags, catchment_area):
     """

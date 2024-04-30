@@ -11,6 +11,7 @@ config.yml
 
 # cache files
 *.json
+*.sqlite
 
 # Distribution / packaging
 .Python
