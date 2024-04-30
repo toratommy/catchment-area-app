@@ -557,6 +557,11 @@ def plot_poi_data_on_map(session_state, map_type):
     # Create a map centered around the catchment area
     map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
     m = folium.Map(location=map_center, zoom_start=12, tiles='OpenStreetMap')
+    # Handle both regular and WMS tile layers
+    if session_state.tile_layer_type == 'WMS':
+        session_state.tile_layer_value.add_to(m)
+    else:
+        m = folium.Map(location=[session_state.location.latitude, session_state.location.longitude], tiles=session_state.tile_layer_value, zoom_start=13)
 
     Fullscreen(position="topright", title="Expand me", title_cancel="Exit me", force_separate_button=True).add_to(m)
     folium.GeoJson(session_state.catchment_area.geometry, style_function=lambda x: {'color': 'blue', 'fill': False}).add_to(m)
