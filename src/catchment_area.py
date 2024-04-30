@@ -4,6 +4,7 @@ from shapely.ops import transform
 from functools import partial
 import pyproj
 from src.utils import load_state_boundaries, find_intersecting_states, calculate_overlapping_tracts, fetch_census_data_for_tracts, fetch_poi_within_catchment
+from requests_cache import install_cache
 
 class CatchmentArea:
     def __init__(self, address, location, radius_type, radius, travel_profile=None, ors_client=None):
@@ -20,12 +21,6 @@ class CatchmentArea:
         self.poi_data = None
         self.area = None
         self.total_pop = None
-
-    def geocode_address(self, address):
-        try:
-            return self.geolocator.geocode(address)
-        except:
-            return None
 
     def generate_geometry(self):
         if self.radius_type == 'Distance (miles)':
@@ -51,12 +46,24 @@ class CatchmentArea:
         return self.geometry
 
     def draw_drive_time_area(self):
+        # Ensure the location and OpenRouteService client are configured
         if not self.location or not self.ors_client:
             raise ValueError("Invalid location or OpenRouteService client not configured.")
+
+        # Enable caching for API requests; the cache lasts for one day (86400 seconds)
+        install_cache('openrouteservice_api_cache', backend='sqlite', expire_after=86400)
+
+        # Define travel profiles and corresponding API parameters
         travel_profile_dict = {
-            "Driving (car)": 'driving-car', "Driving (heavy goods vehicle)": 'driving-hgv', "Walking": 'foot-walking',
-            "Cycling (regular)": 'cycling-regular', "Cycling (road)": 'cycling-road', "Cycling (mountain)": 'cycling-mountain',
-            "Cycling (electric)": 'cycling-electric', "Hiking": 'foot-hiking', "Wheelchair": 'wheelchair'
+            "Driving (car)": 'driving-car',
+            "Driving (heavy goods vehicle)": 'driving-hgv',
+            "Walking": 'foot-walking',
+            "Cycling (regular)": 'cycling-regular',
+            "Cycling (road)": 'cycling-road',
+            "Cycling (mountain)": 'cycling-mountain',
+            "Cycling (electric)": 'cycling-electric',
+            "Hiking": 'foot-hiking',
+            "Wheelchair": 'wheelchair'
         }
         coordinates = [[self.location.longitude, self.location.latitude]]
         params = {
@@ -66,10 +73,17 @@ class CatchmentArea:
             'profile': travel_profile_dict[self.travel_profile],
             'attributes': ['area', 'total_pop']
         }
+
+        # Make the API call with caching
         response_iso = self.ors_client.isochrones(**params)
-        self.geometry = shape(response_iso['features'][0]['geometry'])
-        self.iso_properties = response_iso['features'][0]['properties']
-        return self.geometry
+        
+        # Parse the response and create geometry
+        if 'features' in response_iso and len(response_iso['features']) > 0:
+            self.geometry = shape(response_iso['features'][0]['geometry'])
+            self.iso_properties = response_iso['features'][0]['properties']
+            return self.geometry
+        else:
+            raise ValueError("No isochrone data received from the API.")
     
     def demographic_enrichment(self, census_api, acs_variable_dict, acs_year, normalization):
         if not self.geometry:

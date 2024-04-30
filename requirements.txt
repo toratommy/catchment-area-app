@@ -15,3 +15,4 @@ osmnx
 scipy
 validators
 streamlit-extras
+requests-cache
