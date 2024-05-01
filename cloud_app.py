@@ -130,9 +130,15 @@ def main():
                     acs_variable_dict = dict(zip(acs_variables, acs_variable_types)) # dictionary of variable codes and assocaited variable types
                     # Fetch census data for overlapping tracts
                     st.session_state.catchment_area.demographic_enrichment(census_api, acs_variable_dict,census_year, normalization)
-                    # Generate caption
-                    if ('Total' in var_name) or ('Aggregate' in var_name):
-                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(sum(st.session_state.catchment_area.census_data[list(acs_variable_dict)[0]])):,}')
+                    # Generate dynamic caption (displaying catchment area total or weighted avg. depending on type of variable)
+                    if var_name.startswith('Total') or var_name.startswith('Aggregate'):
+                        st.caption('Sum (across entire catchment) of `'+var_group+'` - `'+var_name+'`: '+f'{int(st.session_state.catchment_area.census_data[list(acs_variable_dict)[0]].sum(skipna=True)):,}')
+                    else: 
+                        weighted_avg_dict = calculate_census_var_weighted_average(st.session_state.catchment_area.census_data, acs_variables)
+                        if ('DOLLARS' in var_group) or  ('INCOME' in var_group) or ('COSTS' in var_group):
+                            st.caption('Average (across entire catchment population) of `'+var_group+'` - `'+var_name+'`: '+f'${np.round(weighted_avg_dict[acs_variables[0]],2):,}')
+                        else:
+                            st.caption('Average (across entire catchment population) of `'+var_group+'` - `'+var_name+'`: '+f'{np.round(weighted_avg_dict[acs_variables[0]],2):,}')
                     # Plot data on map
                     plot_census_data_on_map(st.session_state, list(acs_variable_dict)[0], var_name, normalization)
                     st.divider()
@@ -173,7 +179,6 @@ def main():
         if plot_poi_data:
             if "catchment_area" in st.session_state:
                 with st.spinner('Fetching POI data to plot...'):
-                    time.sleep(2)
                     st.session_state.catchment_area.poi_enrichment(poi_tags)
                 display_poi_counts(poi_tags, st.session_state.catchment_area)
                 plot_poi_data_on_map(st.session_state, poi_map_type)

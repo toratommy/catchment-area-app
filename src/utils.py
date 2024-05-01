@@ -12,7 +12,8 @@ import plotly.figure_factory as ff
 import osmnx as ox
 from folium.plugins import HeatMap
 from folium.raster_layers import WmsTileLayer
-from shapely.geometry import mapping
+from shapely.geometry import mapping, Point
+from geopy.distance import geodesic
 from folium.plugins import Fullscreen
 from requests_cache import install_cache
 
@@ -344,12 +345,10 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
 
     # Group the overlapping tracts by state and county for batch fetching
     for (state_code, county_code), group in overlapping_tracts.groupby(['STATEFP', 'COUNTYFP']):
+
         # Fetch census data for all tracts within this state and county
-        if normalization == 'Yes':
-            fetch_vars = list(variable_dict.keys())+['B01003_001E'] # add population variable which will be used for normalization
-        else:
-            fetch_vars = list(variable_dict.keys())
-        
+        fetch_vars = list(variable_dict.keys())+['B01003_001E'] # add population variable to be used for normalization and weighted avg. calcs
+
         census_json = census_api.acs5.state_county_tract(fetch_vars, state_code, county_code, Census.ALL, year=census_year)
         # Convert the fetched data into a DataFrame
         census_data = pd.DataFrame(census_json)
@@ -360,15 +359,15 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
         # Filter the data to only include those tracts that are in the overlapping_tracts DataFrame
         census_data = census_data.merge(overlapping_tracts[['GEOID', 'coverage_percentage']], on='GEOID', how='inner')
 
+        # scale total population by 'coverage_percentage'
+        census_data['B01003_001E'] = census_data['B01003_001E'] * census_data['coverage_percentage']
+
         # Scale the data for variables of type 'population_count' by 'coverage_percentage'
         for var, vtype in variable_dict.items():
             if vtype == 'population_count':
                 census_data[var] = census_data[var] * census_data['coverage_percentage']
-
-        if normalization == 'Yes':
-            # scale total population by 'coverage_percentage'
-            census_data['B01003_001E'] = census_data['B01003_001E'] * census_data['coverage_percentage']
-            census_data['population_normalized'] = census_data[list(variable_dict)[0]] / census_data['B01003_001E']
+            if normalization == 'Yes':
+                census_data['population_normalized'] = census_data[var] / census_data['B01003_001E']
 
         # Append the filtered data to the all_census_data DataFrame
         census_data_full = pd.concat([census_data_full, census_data], ignore_index=True)
@@ -498,21 +497,65 @@ def create_distribution_plot(census_data, variables, var_name, normalization):
     )
     return fig
 
-def fetch_poi_within_catchment(catchment_polygon, poi_tags):
+def calculate_census_var_weighted_average(census_data, acs_variables):
     """
-    Fetch points of interest within a specified catchment area polygon and category, with API request caching.
+    Calculate the weighted average of specified census variables across all tracts, weighted by population.
+    
+    Parameters
+    ----------
+    census_data : pandas.DataFrame
+        A DataFrame containing fetched census data, which includes census variables and population counts.
+    acs_variables : list
+        List of census variable codes (column names) for which to calculate the weighted averages.
+        
+    Returns
+    -------
+    dict
+        A dictionary containing the weighted averages for each specified census variable.
+    """
+    # Initialize a dictionary to store the weighted averages
+    weighted_averages = {}
+
+    # Calculate the total population for weighting purposes
+    total_population = census_data['B01003_001E'].sum()
+    census_data = census_data[census_data[acs_variables[0]] > 0] # remove any negative value catchment areas
+
+    # Calculate the weighted average for each specified variable
+    for var in acs_variables:
+        if var not in census_data.columns:
+            weighted_averages[var] = None
+            continue  # Skip if the variable is not in the DataFrame
+
+        # Calculate the weighted sum for the variable
+        census_data['weighted_value'] = census_data[var] * census_data['B01003_001E']
+        weighted_sum = census_data['weighted_value'].sum()
+        
+        # Calculate the weighted average for the variable
+        if total_population > 0:  # Avoid division by zero
+            weighted_averages[var] = weighted_sum / total_population
+        else:
+            weighted_averages[var] = None
+
+    return weighted_averages
+
+def fetch_poi_within_catchment(catchment_polygon, location, poi_tags):
+    """
+    Fetch points of interest within a specified catchment area polygon and category,
+    with API request caching, and compute the distance from a given location in miles.
 
     Parameters
     ----------
     catchment_polygon: 
         A Shapely Polygon defining the catchment area.
+    location: 
+        A geopy Location object containing location coordinates.
     poi_tags: 
         A dictionary representing the OSM group and categories of interest (e.g., {'amenity':['cafe', 'restaurant']}).
 
     Returns:
     -------
     GeoDataFrame
-        GeoDataFrame containing the fetched POI data.
+        GeoDataFrame containing the fetched POI data with an additional 'distance' column in miles.
     """
     # Enable caching for API requests; cache will last for two days (172800 seconds)
     install_cache('osm_poi_cache', backend='sqlite', expire_after=172800)
@@ -531,10 +574,16 @@ def fetch_poi_within_catchment(catchment_polygon, poi_tags):
             st.error("No data returned for the specified category within the catchment area.")
             return gpd.GeoDataFrame()  # Return an empty GeoDataFrame
         
+        # Calculate the distance from the provided location to each POI in miles and append it as a new column
+        location_point = Point(location.longitude, location.latitude)
+        pois_gdf['distance'] = pois_gdf['geometry'].apply(
+            lambda x: geodesic((x.centroid.y, x.centroid.x), (location_point.y, location_point.x)).miles
+        )
+
         return pois_gdf
     except Exception as e:
         st.error(f"An error occurred while fetching POIs: {e}")
-        return gpd.GeoDataFrame(columns = [key,'name'])
+        return gpd.GeoDataFrame(columns = [key, 'name'])
     
 def plot_poi_data_on_map(session_state, map_type):
     """
@@ -556,8 +605,7 @@ def plot_poi_data_on_map(session_state, map_type):
     """
     # Create a map centered around the catchment area
     map_center = [session_state.catchment_area.geometry.centroid.y, session_state.catchment_area.geometry.centroid.x]
-    m =  folium.Map(location=map_center, tiles=None, zoom_start=12)
-    m.fit_bounds(session_state.catchment_area.geometry.bounds)
+    m = folium.Map(location=map_center, tiles=None, zoom_start = 12)
     # Handle both regular and WMS tile layers
     if session_state.tile_layer_type == 'WMS':
         session_state.tile_layer_value.add_to(m)
@@ -638,36 +686,40 @@ def plot_poi_bar_chart(catchment_area):
     - fig (plotly.graph_objects.Figure): The Plotly figure object that can be displayed with fig.show().
     """
 
-    metric_type = st.selectbox('Select Metric',['Location count','Locations per capita'], index=1)
+    metric_type = st.selectbox('Select Metric',['Location count','Locations per capita','Distance to catchment location'], index=1)
     pois_gdf = catchment_area.poi_data
 
     if not pois_gdf.empty:
-        plot_df = pois_gdf['name'].value_counts().to_frame('count').reset_index()
-
-        if metric_type not in ['Location count', 'Locations per capita']:
-            raise ValueError("Invalid metric type provided. Choose 'location count' or 'locations per capita'.")
+        plot_df = pois_gdf.groupby('name').agg({'geometry':'count', 'distance':'min'}).reset_index()
+        plot_df.rename(columns={'geometry':'count'}, inplace=True)
 
         # Calculate the metric
         if metric_type == 'Locations per capita':
             plot_df['metric'] = (plot_df['count'] / catchment_area.total_population) * 10000
             x_title = "Locations per Capita (per 10,000 persons)"
-        else:
+            category_order = 'total ascending'
+            top_locations = plot_df.nlargest(20, 'metric')
+        elif metric_type == 'Location count':
             plot_df['metric'] = plot_df['count']
             x_title = "Location Count"
+            category_order = 'total ascending'
+            top_locations = plot_df.nlargest(20, 'metric')
+        else:
+            plot_df['metric'] = plot_df['distance']
+            x_title = "Distance to Catchment Location (miles)"
+            category_order = 'total descending'
+            top_locations = plot_df.nsmallest(20, 'metric')
 
         # Create the plot
         fig = px.bar(plot_df, y='name', x='metric', orientation='h',
                     title="Points of Interest Analysis",
                     labels={'name': 'Location Name', 'metric': x_title},
                     height=600, width=800)
-        
-        # Filter the DataFrame to only include the top 20 locations based on the metric
-        top_locations = plot_df.nlargest(20, 'metric')
 
         # Create the plot
         fig = px.bar(top_locations, y='name', x='metric', orientation='h',
                     title=f'Top 20 Points of Interest by {x_title}',
                     labels={'location_name': 'Location Name', 'metric': x_title},
                     height=600, width=800)
-        fig.update_layout(yaxis={'categoryorder': 'total ascending'}, xaxis_title=x_title, yaxis_title="Location Name")
+        fig.update_layout(yaxis={'categoryorder': category_order}, xaxis_title=x_title, yaxis_title="Location Name")
         st.plotly_chart(fig, use_container_width=True)
