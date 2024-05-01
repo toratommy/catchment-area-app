@@ -34,8 +34,8 @@ def main():
         st.image('https://assets-global.website-files.com/659c81c957e77aeea1809418/65b2f184ee9f42f63bc2c651_TORA%20Logo%20(No%20Background)-p-800.png')
         st.subheader('About')
         st.caption("""📍 Welcome to Catchment Area Explorer! Generate a custom catchment 
-               area defined by distance or drive time around any location in the US. 
-               Uncover insights by overlaying key demographic and POI data within your catchment area. 
+               area defined by distance or travel time around any location in the US. 
+               Uncover insights by overlaying key demographic, point-of-interest, and real estate data within your catchment area. 
                Utilizing 100% open-source data and tools!
                """
         )
@@ -50,7 +50,7 @@ def main():
         st.subheader('Catchment area characteristics')
         st.session_state.tile_layer_value, st.session_state.tile_layer_type = map_tile_layer_selections()
         # Initialize a location
-        st.session_state.location = Location(point=(41.87, -87.62), address=default_address, raw={'place_id': 'manual'})
+        st.session_state.location = geocode_address(address, nominatim_client)
         # Initialize map
         st.session_state.catchment_map = folium.Map(location=[st.session_state.location.latitude, st.session_state.location.longitude], zoom_start=13)
         update_map_layer(st.session_state)
@@ -60,7 +60,6 @@ def main():
         # Generate catchment area
         if generate_catchment:
             # Initialize 'location' in session state if not already present
-            st.session_state.location = geocode_address(address, nominatim_client)
             if st.session_state.location:
                 with st.spinner('Generating catchment area...'):
                     st.session_state.catchment_area = CatchmentArea(address,
