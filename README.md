@@ -19,9 +19,9 @@ This app is deployed on Streamlit Cloud. Access it here: https://catchment-area-
 ## Local Setup
 1. Clone this repository.
 2. Install dependencies: pip install -r requirements.txt
-3. Add required API keys to config.yml (see [local_app.py](https://github.com/toratommy/catchment-area-app/blob/main/local_app.py) for required YAML variable names)
-4. Run the app: streamlit run local_app.py
-Note: utility functions can be found in the [src](https://github.com/toratommy/catchment-area-app/tree/main/src) folder
+3. Add required API keys to `.streamlit/secrets.toml` (see [cloud_app.py](https://github.com/toratommy/catchment-area-app/blob/main/cloud_app.py) for required secrets)
+4. Run the app: streamlit run cloud_app.py
+Note: utility functions/classes can be found in the [src](https://github.com/toratommy/catchment-area-app/tree/main/src) folder
 
 ## Configuration
 Configuration settings (API keys, data year, etc.) are located in config.yml. Customize this file as needed for your deployment.
