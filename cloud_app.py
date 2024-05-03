@@ -10,6 +10,12 @@ import pickle
 from folium.plugins import Fullscreen
 from src.catchment_area import CatchmentArea
 
+# TO DO:
+# update ACS data to 2022
+# add llm to help user find census var
+# add census data profiles
+# add real estate data
+
 # Initialize configuration variables
 ors_client = client.Client(key=st.secrets['openroute_api_key'])
 census_year = st.secrets['census_year']
