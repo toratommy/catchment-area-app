@@ -146,7 +146,7 @@ def main():
                         else:
                             st.caption('Average (across entire catchment population) of `'+var_group+'` - `'+var_name+'`: '+f'{np.round(weighted_avg_dict[acs_variables[0]],2):,}')
                     # Plot data on map
-                    plot_census_data_on_map(st.session_state, list(acs_variable_dict)[0], var_name, normalization)
+                    plot_census_data_on_map(st.session_state, list(acs_variable_dict)[0], var_name, var_group, normalization)
                     st.divider()
                     # Generate distribution plot
                     fig = create_distribution_plot(st.session_state.catchment_area.census_data, list(acs_variable_dict), var_name, normalization)
