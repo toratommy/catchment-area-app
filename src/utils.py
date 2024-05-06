@@ -201,6 +201,7 @@ def fetch_census_variables(api_url):
         variables_df.rename(columns={'level_1':'variable','concept':'Variable Group','label':'Variable Name'}, inplace=True)
         variables_df['Variable Name'] = variables_df['Variable Name'].str.replace('Estimate!!', '').str.replace('!!', ' ')
         variables_df['Variable Group'] = variables_df['Variable Group'].str.replace(" (IN 2021 INFLATION-ADJUSTED DOLLARS)","")
+        variables_df['Variable Name'] = variables_df['Variable Name'].str.replace(" (in 2021 inflation-adjusted dollars)","")
 
         # Determine variable type based on the 'Variable Name'
         variables_df['variable_type'] = variables_df['Variable Name'].apply(
