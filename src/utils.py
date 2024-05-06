@@ -103,7 +103,10 @@ def make_census_variable_selections(filters_dict):
     """
     var_group = st.selectbox('Choose Census Variable Group', options=(v for v in filters_dict.keys()),index=445)
     var_name = st.selectbox('Choose Census Variable Name', options=filters_dict[var_group])
-    normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
+    if var_name.startswith('Total') or var_name.startswith('Aggregate'):
+        normalization = st.radio("Normalize by Population?",["No", "Yes"],index=0)
+    else:
+        normalization = "No"
     return var_group, var_name, normalization
 
 @st.experimental_fragment
@@ -376,7 +379,7 @@ def fetch_census_data_for_tracts(census_api, census_year, variable_dict, overlap
 
     return census_data_full
 
-def plot_census_data_on_map(session_state, census_variable, var_name, normalization):
+def plot_census_data_on_map(session_state, census_variable, var_name, var_group, normalization):
     """
     Plots census data on a map, coloring tracts by a specified census variable.
     
@@ -388,6 +391,8 @@ def plot_census_data_on_map(session_state, census_variable, var_name, normalizat
         The census variable to color the tracts by.
     var_name : str
         The name of the variable (for display purposes).
+    var_group: str
+        The group of the variable (for display purposes)
     normalization : str
         Indicates if the data should be normalized.
     
@@ -409,16 +414,24 @@ def plot_census_data_on_map(session_state, census_variable, var_name, normalizat
     
     # Existing code for merging data and adding GeoJson layer
     merged_data = session_state.catchment_area.census_tracts.merge(session_state.catchment_area.census_data, left_on='GEOID', right_on='GEOID')
-    geojson_data = merged_data.to_json()
 
     if normalization == 'Yes':
         plot_var = 'population_normalized'
         alias = var_name+' (Population Normalized):'
         deciles = merged_data['population_normalized'].quantile([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]).to_list()
+        merged_data['tooltip_value'] = merged_data[plot_var].apply(lambda x: f'{x:.2%}' if pd.notna(x) else x)
     else:
         plot_var = census_variable
         alias = var_name+':'
         deciles = merged_data[census_variable].quantile([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]).to_list()
+        if var_name.startswith('Total') or var_name.startswith('Aggregate'):
+            merged_data['tooltip_value'] = merged_data[plot_var].apply(lambda x: f'{x:,.2f}' if pd.notna(x) else x)
+        elif ('DOLLARS' in var_group) or  ('INCOME' in var_group) or ('COSTS' in var_group):
+            merged_data['tooltip_value'] = merged_data[plot_var].apply(lambda x: f'${x:,.2f}' if pd.notna(x) else x)
+        else:
+            merged_data['tooltip_value'] = merged_data[plot_var]
+
+    geojson_data = merged_data.to_json()
 
     folium.GeoJson(
         geojson_data,
@@ -428,7 +441,7 @@ def plot_census_data_on_map(session_state, census_variable, var_name, normalizat
             'weight': 0.1,
             'fillOpacity': 0.7,
         },
-        tooltip=folium.GeoJsonTooltip(fields=[plot_var],
+        tooltip=folium.GeoJsonTooltip(fields=['tooltip_value'],
                                       aliases=[alias],
                                       localize=True)
     ).add_to(m)
